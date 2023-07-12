@@ -2,7 +2,7 @@
 
 ---
 
-### Category Name 1 
+### Title 1 
 
 Coming soon
 
