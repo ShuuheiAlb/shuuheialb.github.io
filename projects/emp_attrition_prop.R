@@ -2,7 +2,7 @@
 # Import & clean
 rm(list = ls())
 setwd("Downloads/projects")
-hr <- read.csv("HR_Analytics.csv")
+hr <- read.csv("emp_attrition.csv")
 hr <- hr[, !(names(hr) %in% c("Over18", "EmployeeCount", "EmployeeNumber", "StandardHours"))]
 cat_cols <- c("BusinessTravel", "Department", "EducationField", "Gender", "JobRole", "MaritalStatus", "OverTime")
 hr[cat_cols] <- lapply(hr[cat_cols], factor)
