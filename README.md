@@ -1,4 +1,6 @@
-## Data Analysis Portfolio Projects
+## Portfolio Projects
+
+Mostly data analysis/statistics/mathematics. Maybe some other stuff.
 
 Template by Ivanna Kacewica [1].
 
