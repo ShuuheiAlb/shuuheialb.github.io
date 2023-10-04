@@ -222,11 +222,11 @@ plot_correlation(hr, model)
 
 
 
-![png](prediction_files/prediction_7_2.png)
+![png](project_etp_files/project_etp_7_2.png)
 
 
 
-![png](prediction_files/prediction_7_3.png)
+![png](project_etp_files/project_etp_7_3.png)
 
 
 The PEC graph shows that our model has around $75 - 95\%$ accuracy in predicting employee stay/turnover probability.
@@ -324,7 +324,7 @@ plot_pec(selected_features, model_v2)
 
 
 
-![png](prediction_files/prediction_14_1.png)
+![png](project_etp_files/project_etp_14_1.png)
 
 
 ---
@@ -385,7 +385,7 @@ for (i in 1:nrow(hrindv)) {
 ```
 
 
-![png](prediction_files/prediction_17_0.png)
+![png](project_etp_files/project_etp_17_0.png)
 
 
 ## Recommended strategies
