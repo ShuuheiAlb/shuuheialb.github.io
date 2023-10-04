@@ -4,7 +4,7 @@
 
 ### Employee Turnover Prediction
 
-[This project](https://github.com/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/employee-turnover/prediction.ipynb) will build Random Survival Forest model to predict employee turnover, identify most influential variables affecting turnover, and suggest intervention strategies.
+[This project](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/employee-turnover/prediction.ipynb) will build Random Survival Forest model to predict employee turnover, identify most influential variables affecting turnover, and suggest intervention strategies.
 
 ---
 
