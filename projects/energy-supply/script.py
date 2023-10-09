@@ -30,7 +30,7 @@ def exploratory_test():
     json_print(opennem_response(path).json())
     sys.exit()
 
-exploratory_test()
+#exploratory_test()
 
 try:
     # Start small: Solar PV in SA
@@ -47,17 +47,15 @@ try:
             if not (facility["network_region"] == "SA1"):
                 continue
             stations.add((station_code, location_id))
-    print(stations)
 
     # Compile weather station list
-    data = opennem_response(weather_station_path).json()["data"]
+    data = opennem_response(weather_station_path).json()
     weather_stations = []
     for entry in data:
         if entry["state"] == "SA":
             weather_station_code = entry["code"]
-            lattitude = entry["lat"]
-            longitude = entry["lng"]
-            weather_stations.append((weather_station_code, lattitude, longitude))
+            lattitude = entry["lat"]; longitude = entry["lng"]
+            weather_stations.append((weather_station_code, longitude, lattitude))
 
     # Energy supply data for each station, hourly for 5 year
     # Dataframe will be plant code, date, energy, temperature + weather, lattitude + location
@@ -74,21 +72,28 @@ try:
             continue
         data = response.json()["data"]
 
-        # UPDATE: add location detail, temperature detail
-        lattitude = opennem_response(get_location_path(location_id))["record"]["lat"]
-        # get the closest station's temperature?
-        for entry in data:
+        # Get the station's coordinate, and the closest weather station's temperature
+        location_record = opennem_response(get_location_path(location_id)).json()["record"]
+        station_coord = (location_record["lng"], location_record["lat"])
+        #from math import dist
+        #min([dist(station_coord, (ws[1], ws[2])) for ws in weather_stations])
+
+        # Create dataframe
+        for entry in data: # maybe factorise
             if entry["data_type"] == "energy":
                 single_plant_supply_list = entry["history"]["data"]
                 single_plant_supply_df = pd.DataFrame({"Name": [station_code] * len(single_plant_supply_list),
                                             "Date" : range(len(single_plant_supply_list)),
                                             "Energy": entry["history"]["data"],
-                                            "Lattitude": [lattitude] * len(single_plant_supply_list)})
+                                            "Longitude": [location_record["lng"]] * len(single_plant_supply_list),
+                                            "Lattitude": [location_record["lat"]] * len(single_plant_supply_list)})
                 energy_supply_df = pd.concat([energy_supply_df, single_plant_supply_df])
     # Aggregate sum for all plant codes
-    energy_supply_df = energy_supply_df.groupby(["Name", "Date"])["Energy"].sum().reset_index()
+    energy_supply_df = energy_supply_df.groupby(["Name", "Date", "Lattitude"])["Energy"].sum().reset_index()
     
     print(energy_supply_df)
+
+
 
 except requests.exceptions.RequestException as e:
     print(f"Error: {e}")
