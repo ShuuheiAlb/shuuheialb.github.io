@@ -1,22 +1,25 @@
 
 # Import & clean
-rm(list = ls())
 setwd("Downloads/shuuheialb.github.io/projects/employee-attrition")
+rm(list = ls())
 hr <- read.csv("hr_data.csv")
 
-remove_cols <- function(df, cols) df[, !(names(df) %in% cols)]
-hr_emp_ids <- hr["EmployeeNumber"] # Save for backup
-hr <- remove_cols(hr, c("EmployeeNumber"))
+cols <- names(hr)
+cols <- cols[cols != "EmployeeNumber"]
 single_value_cols <- names(hr)[sapply(hr, function (col) length(unique(col)) == 1)]
-hr <- remove_cols(hr, single_value_cols)
-cat_cols <- c("Attrition", "BusinessTravel", "Department", "EducationField", "Gender", "JobRole", "MaritalStatus", "OverTime")
+cols <- cols[!(cols %in% single_value_cols)]
+
+# Convert column data types
+cat_cols <- c("BusinessTravel", "Department", "EducationField", "JobRole")
 hr[cat_cols] <- lapply(hr[cat_cols], factor)
-summary(hr)
-hr$Attrition <- ifelse(hr$Attrition == "Yes", TRUE, FALSE)
+bool_cols <- c("Attrition", "Gender", "MaritalStatus", "OverTime")
+hr[bool_cols] <- lapply(hr[bool_cols], function (col) ifelse(col == "Yes", TRUE, FALSE))
+
 
 library(randomForestSRC)
 library(survival)
 library(pec, warn.conflicts = FALSE)
+library(pROC)
 library(ggplot2)
 library(reshape2)
 library(viridis)
@@ -30,8 +33,8 @@ rsf_model <- function (df) {
 # Accuracy plot
 plot_pec <- function(df, model) {
   pred_error <- pec(model, data = df, formula = Surv(YearsAtCompany, Attrition) ~ .,
-                    splitMethod = "none", cens.model = "marginal")
-  plot(pred_error, xlim = c(0, 30), )
+                    splitMethod = "cv10", cens.model = "marginal")
+  plot(pred_error, xlim = c(0, 20), )
   title("RSF Model Prediction Error Curve")
 }
 
@@ -80,17 +83,22 @@ plot_correlation <- function (df, model) {
 }
 
 # First iteration
-#model <- rsf_model(hr)
-#plot_pec(hr, model)
-#k_fold_cross_val(hr)
-#plot_correlation(hr, model)
+#hr1 <- hr[cols]
+#model_v1 <- rsf_model(hr1)
+#plot_pec(hr1, model_v1)
+#k_fold_cross_val(hr1)
+#focus_cols <- c("Attrition", "YearsAtCompany", "OverTime", "JobLevel", "Age",
+#                "NumCompaniesWorked", "MonthlyIncome", "StockOptionLevel")
+#plot_correlation(hr[focus_cols], model_v1)
 
 # Second iteration
-selected_features <- hr[, c("Attrition", "YearsAtCompany", "Age", "MonthlyIncome", "OverTime", "NumCompaniesWorked",
-                            "StockOptionLevel", "JobRole")]
-k_fold_cross_val(selected_features)
-model_v2 <- rsf_model(selected_features)
-plot_pec(selected_features, model_v2)
+hr["NumCompaniesWorkedPerYear"] <- hr["NumCompaniesWorked"]/(hr["TotalWorkingYears"] + 0.5)
+cols <- c("Attrition", "YearsAtCompany", "MonthlyIncome", "OverTime", "Age",
+          "JobRole", "NumCompaniesWorkedPerYear", "StockOptionLevel")
+hr2 <- hr[cols]
+k_fold_cross_val(hr2)
+model_v2 <- rsf_model(hr2)
+plot_pec(hr2, model_v2)
 
 # Prediction
 rsf_attrition_probability <- function (df, model) {
@@ -107,8 +115,6 @@ for (i in 1:5) {
 head(hr)
 
 hriidx <- rsf_high_risk_indiv_idx(hr, model_v2)
-hr_emp_ids
-hriidx
 hridv <- hr[hriidx, c("AttritionProb_Year1", "AttritionProb_Year2", "AttritionProb_Year3",
                       "AttritionProb_Year4", "AttritionProb_Year5")]
 plot(1, type = "n", xlim = c(1, ncol(hridv)), ylim = range(hridv), xlab = "Year", ylab = "Probability")
@@ -116,5 +122,8 @@ title("100 High-Risk Employee Turnoever Trajectory")
 for (i in 1:nrow(hridv)) {
   lines(1:ncol(hridv), hridv[i, ], col = i, type = "l")
 }
-legend("topright", legend = hr_emp_ids[hriidx, ], col = 1:nrow(hridv), lty = 1, title = "Employee Number")
+legend("topright", legend = hr[hriidx, "EmployeeNumber"], col = 1:nrow(hridv), lty = 1, title = "Employee Number")
 
+# Save the model
+saveRDS(model_v2, "model.rds")
+saveRDS(hr, "transformed_data.rds")

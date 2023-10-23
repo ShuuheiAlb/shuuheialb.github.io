@@ -64,9 +64,9 @@ if not isfile(csv_path):
                 stations.add((station_code, location_id))
 
         # Extracting solar supply data for each station, daily for 5 years, until yesterday (GMT).
-        # DF will have station code, date, energy, temperature + weather, lattitude/longitude + location
+        # DF will have station code, date, energy, temperature + weather, latitude/longitude + location
         solar_supply_df = pd.DataFrame(columns=["Name", "Date", "Energy", "Mean Temperature", "Max Temperature",
-                                                "Min Temperature", "Longitude", "Lattitude"])
+                                                "Min Temperature", "Longitude", "Latitude"])
         for station in stations:
             station_code, station_loc_id = station
             ebs_path = f"/stats/energy/station/NEM/{station_code}"
@@ -109,7 +109,7 @@ if not isfile(csv_path):
                                     "Max Temperature": max_temps,
                                     "Min Temperature": min_temps,
                                     "Longitude": [station_loc_record["lng"]] * len(station_supply_array),
-                                    "Lattitude": [station_loc_record["lat"]] * len(station_supply_array)
+                                    "Latitude": [station_loc_record["lat"]] * len(station_supply_array)
                                 })
             solar_supply_df = solar_supply_df.append(station_supply_df)
         

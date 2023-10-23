@@ -1,39 +1,43 @@
+import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
-from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-
-
-
-# Time Series Analysis: LTSM
-# Select the relevant columns for modeling
-data = pd.read_csv("extracted.csv")
-selected_columns = ["Energy", "Mean Temperature"]
-data["Mean Temperature"].interpolate(method="linear", inplace=True) # Simple interpol
-
-# Scale the data
-scaler = MinMaxScaler()
-scaled_data = scaler.fit_transform(data[selected_columns])
-
-# Set the sequence length and generate sequences
-sequence_length = 7  # Number of past observations to consider
-generator = TimeseriesGenerator(scaled_data, scaled_data, length=sequence_length, batch_size=32)
-
-# Split the data into training and testing sets
-train_X, test_X, train_y, test_y = train_test_split(generator[0][0], generator[0][1], test_size=0.2, shuffle=False)
-
-# Define the LSTM model
-model = Sequential()
-model.add(LSTM(64, activation='relu', input_shape=(sequence_length, len(selected_columns))))
-model.add(Dense(len(selected_columns)))
-
-# Compile the model
-model.compile(optimizer='adam', loss='mse')
-
-# Train the model
-model.fit(train_X, train_y, epochs=10, batch_size=32)
+from tensorflow import keras
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-# Evaluate the model as needed
+# Import data
+df = pd.read_csv("extracted.csv")
+
+# Extract features (including coordinates) and target (energy)
+X = df[["Mean Temperature", "Max Temperature", "Min Temperature", "Longitude", "Latitude"]].values
+y = df["Energy"].values
+
+# Add date features (You may need to customize this based on your dataset)
+# SOOON
+X = np.column_stack((X, df['Date'].dt.date, df['Date'].dt.dayofweek, df['Date'].dt.month, df['Date'].dt.year))
+
+# Normalize the features
+scaler = StandardScaler()
+X = scaler.fit_transform(X)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Create an LSTM model
+model = keras.Sequential([
+    keras.layers.LSTM(100, input_shape=(X_train.shape[1], 1)),
+    keras.layers.Dense(1)
+])
+
+model.compile(loss="mean_squared_error", optimizer="adam")
+
+# Train the model
+model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=0)
+
+# Evaluate the model
+test_loss = model.evaluate(X_test, y_test)
+print(f"Test Loss: {test_loss}")
+
+# Now you have a unified model that takes geographical coordinates into account for energy prediction.
+# You can use this model for making predictions.
