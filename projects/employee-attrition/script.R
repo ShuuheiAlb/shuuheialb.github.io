@@ -123,7 +123,3 @@ for (i in 1:nrow(hridv)) {
   lines(1:ncol(hridv), hridv[i, ], col = i, type = "l")
 }
 legend("topright", legend = hr[hriidx, "EmployeeNumber"], col = 1:nrow(hridv), lty = 1, title = "Employee Number")
-
-# Save the model
-saveRDS(model_v2, "model.rds")
-saveRDS(hr, "transformed_data.rds")

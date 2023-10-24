@@ -1,7 +1,5 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
 from tensorflow import keras
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -15,7 +13,8 @@ y = df["Energy"].values
 
 # Add date features (You may need to customize this based on your dataset)
 # SOOON
-X = np.column_stack((X, df['Date'].dt.date, df['Date'].dt.dayofweek, df['Date'].dt.month, df['Date'].dt.year))
+df["Date"] = pd.to_datetime(df["Date"])
+X = np.column_stack((X, df['Date'].dt.day, df['Date'].dt.dayofweek, df['Date'].dt.month, df['Date'].dt.year))
 
 # Normalize the features
 scaler = StandardScaler()
