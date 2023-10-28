@@ -1,10 +1,8 @@
 #%%
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from scipy.optimize import curve_fit
 
 # Import data
 df = pd.read_csv("extracted.csv")
@@ -17,41 +15,26 @@ y = df["Energy"].values
 df["Date"] = pd.to_datetime(df["Date"])
 X = np.column_stack((X, df['Date'].dt.day, df['Date'].dt.dayofweek, df['Date'].dt.month, df['Date'].dt.year))
 
-# Normalize the features
-scaler = StandardScaler()
-X = scaler.fit_transform(X)
+# By exploraion, the max is sinusoid
+sub_df = df[df["Name"] == "BNGSF1"]
+window = 10
+sub_df["Smoothed Max Energy"] = sub_df["Energy"].rolling(window).max()
+sub_df.loc[:window, "Smoothed Max Energy"] = sub_df.loc[:window, "Energy"]
 
-# Split the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+# Fit model
+gap = 365
+train, test = sub_df[:-gap], sub_df[-gap:]
+def sinusoidal_func(t, amplitude, frequency, phase, bitude, reduction_factor):
+    return amplitude*np.sin(2*np.pi*frequency*t + phase) + bitude
+t = range(len(train))
+initial_guess = [350, 1/365, 180, 950, 0.2]
+popt, pcov = curve_fit(sinusoidal_func, t, train["Smoothed Max Energy"], p0=initial_guess)
+print(popt, pcov)
 
-plot = df[["Date", "Energy"]].plot(x = "Date")
-
-#%%
-from statsmodels.tsa.stattools import adfuller
-result = adfuller(df["Energy"].diff()[1:])
-print('ADF Statistic: %f' % result[0])
-print('p-value: %f' % result[1])
-print('Critical Values:')
-for key, value in result[4].items():
-  print('\t%s: %.3f' % (key, value))
-
-sm.graphics.tsa.plot_acf(df["Energy"], lags=20)
-sm.graphics.tsa.plot_pacf(df["Energy"], lags=20)
+plt.plot(train["Date"], train["Energy"], label='Original Data')
+plt.plot(train["Date"], sinusoidal_func(t, *popt), label='Fitted Model')
+plt.legend()
 plt.show()
 
-"""
-# Create an ARIMAX model
-(p, d, q) = (1, 1, 0)
-model = sm.tsa.ARIMA(y, exog=X, order=(p, d, q))
-model_fit = model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=0)
+# And the residual is weather dependent etc, i.e. time series
 
-# Evaluate the model
-test_loss = model.evaluate(X_test, y_test)
-print(f"Test Loss: {test_loss}")
-
-# Now you have a unified model that takes geographical coordinates into account for energy prediction.
-# You can use this model for making predictions.
-forecast = model_fit.get_forecast(steps=10)  # Replace steps with the number of future steps to forecast
-forecast_values = forecast.predicted_mean
-confidence_intervals = forecast.conf_int()"""
-# %%
