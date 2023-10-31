@@ -143,26 +143,125 @@ cols <- c("Attrition", "YearsAtCompany", "MonthlyIncome", "OverTime", "Age",
           "JobRole", "NumCompaniesWorkedPerYear", "StockOptionLevel")
 
 # Prediction
-hr["HazardRatio_CoxPH"] <- predict(coxph_final_model, type = "risk")
-hr["Hazard_RSF"] <- predict(rsf_final_model, hr)$chf[, 1]
-hr["Hazard_CoxPH"] <- ( as.matrix(exp(predict(coxph_final_model, type = "lp"))) %*%
-                          t(as.matrix(basehaz(coxph_final_model)["hazard"])) )[, 1]
-ap_cols <- sapply(0:5, function(i) paste0("AttritionProb_Year", i))
-hr[, ap_cols] <- sapply(0:5, function(i) (1 - predict(rsf_final_model, hr)$survival)[, i+1])
-preview_cols <- c("EmployeeNumber", coxph_cols, rsf_cols,
-                  "HazardRatio_CoxPH", "Hazard_CoxPH", "Hazard_RSF", ap_cols)
+hr["HazardRatio_CoxPH"] <- predict(coxph_final_model, hr, type = "risk")
+# coxph_risk <- exp(predict(coxph_final_model, hr, type = "lp")) %*% t(basehaz(coxph_final_model)["hazard"])
 
+years = 5
+rsf_risk <- predict(rsf_final_model, hr)$chf[, 1:(years+1)] # matrix
+rsf_survival_probs <- predict(rsf_final_model, hr)$survival[, 1:(years+1)]
+hr["Hazard_RSF_Current"] <- rsf_risk[, 1]
+hzrsf_cols <- sapply(0:years, function(i) {paste0("Hazard_RSF_", i)})
+hr[hzrsf_cols] <- rsf_risk[, 1 + (0:years)]
+
+preview_cols <- c("EmployeeNumber", coxph_cols, rsf_cols, "HazardRatio_CoxPH", hzrsf_cols)
+
+# Table sorted by Cox Hazard Ratio
 cutoff = 50
 sorted <- function (df, key_col) {
   df <- df[df["Attrition"] == FALSE, ]
   return(row.names(df)[order(df[, key_col], decreasing = TRUE)][1:cutoff])
 }
-head(hr)
+hr_sorted_coxph <- hr[sorted(hr, "HazardRatio_CoxPH"), ]
+head(hr_sorted_coxph[, preview_cols])
 
-hridv <- hr[sorted(hr, "Hazard_RSF"), preview_cols]
-plot(1, type = "n", xlim = c(0, 5), ylim = c(0, 1), xlab = "Year", ylab = "Probability")
-title("High-Risk Employee Turnoever Trajectory")
-for (i in 1:cutoff) {
-  lines(0:5, hridv[i, ap_cols], col = i, type = "l")
+#hridv <- hr[hr_sorted_coxph(hr, "Hazard_RSF"), preview_cols]
+#plot(1, type = "n", xlim = c(0, 5), ylim = c(0, 1), xlab = "Year", ylab = "Probability")
+#title("High-Risk Employee Turnoever Trajectory")
+#for (i in 1:cutoff) {
+#  lines(0:years, hridv[i, ap_cols], col = i, type = "l")
+#}
+#legend("topleft", legend = hridv[, "EmployeeNumber"], col = 1:nrow(hridv), lty = 1, title = "Employee Number")
+
+# Plotly: Options to group them based on variables?
+
+suppressMessages(library(plotly))
+
+group <- "EmployeeNumber"
+hr_sorted_rsf <- hr[sorted(hr, "Hazard_RSF_Current"), ]
+
+# Adding trajectory risks
+fig <- plot_ly(type = "scatter", mode = "lines+markers")
+for (rank in 1:cutoff) {
+  employee_row_num <- as.numeric(rownames(hr_sorted_rsf)[rank])
+  employee_row <- hr_sorted_rsf[rank, ]
+  x <- 0:(ncol(rsf_risk)-1)
+  y <- rsf_risk[employee_row_num, ]
+  fig <- fig %>% add_trace(x = x,
+                           y = y,
+                           name = employee_row["EmployeeNumber"],
+                           marker = list(size = 4),
+                           line = list(shape = "spline", width = 1),
+                           hoverinfo = "text",
+                           text = paste0("<i>#", rank, ": Employee ", employee_row["EmployeeNumber"], "</i>",
+                                         "\nYear: ", x,
+                                         "\nScore: ", y),
+                           legendgroup = employee_row["EmployeeNumber"],
+                           showlegend = TRUE
+  )
 }
-legend("topleft", legend = hridv[, "EmployeeNumber"], col = 1:nrow(hridv), lty = 1, title = "Employee Number")
+
+# Including the baseline
+avg_cum_hazard <- -log(1-mean(hr[, "Attrition"]))
+baseline <- list(
+  type = "line", x0 = 0, x1 = 5, y0 = avg_cum_hazard, y1 = avg_cum_hazard,
+  line = list(dash = "dash", width = 4, color = "#82A0D8")
+)
+fig <- fig %>% layout(
+  shapes = list(baseline)
+) #%>% add_text(
+#  showlegend = FALSE, x = 0.25, y = 0.22, text = "Average hazard", 
+)
+
+# Adding options to group them based on variables
+library(RColorBrewer)
+unique_index <- function(x) {
+  unique_vals <- unique(x)
+  first_occur <- integer(length(unique_vals))
+  for (i in 1:length(unique_vals)) {
+    first_occur[i] <- which(x == unique_vals[i])[1]
+  }
+  return(first_occur)
+}
+create_buttons <- function(vars) {
+  lapply(vars, function(var) {
+    color_palletes <- brewer.pal(12, "Set3")
+    var_factors <- as.numeric(factor(hr_sorted_rsf[[var]]))
+    button <- list(
+      method = "restyle",
+      label = var,
+      args = list(list( # Some elements are just "double-list". This changes style to every DOM elements
+        line.color = color_palletes[var_factors],
+        marker.color = color_palletes[var_factors],
+        legendgroup = factor(hr_sorted_rsf[[var]]),
+        showlegend = 1:cutoff %in% unique_index(var_factors),
+        name = factor(hr_sorted_rsf[[var]]),
+        trace = 1:50
+      ))
+    )
+    return(button)
+  })
+}
+
+# Setting layout
+fig <- fig %>% layout(
+  title = "High-Risk Employee Attrition Trajectory",
+  xaxis = list(title = "Year", range = c(0, 5), zerolinecolor = '#ffff'),
+  yaxis = list(title = "Accummulated Risk until Year _", range = c(0, 1.5), zerolinecolor = '#ffff'),
+  plot_bgcolor = '#e5ecf6',
+  updatemenus = list(
+    list(
+      y = 0.9,
+      showactive = TRUE,
+      buttons = create_buttons(c("EmployeeNumber", "BusinessTravel", "EnvironmentSatisfaction", "Gender",
+                                 "JobLevel", "JobRole", "JobSatisfaction", "MaritalStatus", "NumCompaniesWorked",
+                                 "OverTime", "StockOptionLevel"))
+    )
+  ),
+  annotations = list(
+    list(
+      text = "Based on", x = -0.3, xref = "paper", y = 1, yref = "paper", align = "left", showarrow = FALSE
+    )
+  )
+)
+
+fig
