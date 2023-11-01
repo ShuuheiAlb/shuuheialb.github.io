@@ -172,15 +172,14 @@ head(hr_sorted_coxph[, preview_cols])
 #}
 #legend("topleft", legend = hridv[, "EmployeeNumber"], col = 1:nrow(hridv), lty = 1, title = "Employee Number")
 
-# Plotly: Options to group them based on variables?
-
+# Plotly implementation
 suppressMessages(library(plotly))
 
 group <- "EmployeeNumber"
 hr_sorted_rsf <- hr[sorted(hr, "Hazard_RSF_Current"), ]
 
-# Adding trajectory risks
-fig <- plot_ly(type = "scatter", mode = "lines+markers")
+# Adding RSH trajectory risks
+fig <- plot_ly()
 for (rank in 1:cutoff) {
   employee_row_num <- as.numeric(rownames(hr_sorted_rsf)[rank])
   employee_row <- hr_sorted_rsf[rank, ]
@@ -189,17 +188,28 @@ for (rank in 1:cutoff) {
   fig <- fig %>% add_trace(x = x,
                            y = y,
                            name = employee_row["EmployeeNumber"],
+                           type = "scatter", mode = "lines+markers", # every time you put type, it assign DOMNum = 0
                            marker = list(size = 4),
                            line = list(shape = "spline", width = 1),
-                           hoverinfo = "text",
-                           text = paste0("<i>#", rank, ": Employee ", employee_row["EmployeeNumber"], "</i>",
-                                         "\nYear: ", x,
-                                         "\nScore: ", y),
+                           hovertemplate = paste0("<i>#", rank, ": Employee ", employee_row["EmployeeNumber"], "</i>",
+                                                  "\nYear: ", x,
+                                                  "\nRisk score: ", y),
                            legendgroup = employee_row["EmployeeNumber"],
                            showlegend = TRUE
   )
 }
 
+# CoxPH
+fig <- fig %>% add_trace(data = hr_sorted_coxph,
+                         y = ~HazardRatio_CoxPH,
+                         type = "bar",
+                         marker = list(color = ~YearsAtCompany),
+                         hovertemplate = paste0("Employee ", hr_sorted_coxph$EmployeeNumber,
+                                                "\nHazard ratio: ", hr_sorted_coxph$HazardRatio_CoxPH),
+                         visible = FALSE, showlegend = FALSE)
+
+
+# --- Decorators
 # Including the baseline
 avg_cum_hazard <- -log(1-mean(hr[, "Attrition"]))
 baseline <- list(
@@ -208,11 +218,12 @@ baseline <- list(
 )
 fig <- fig %>% layout(
   shapes = list(baseline)
-) #%>% add_text(
-#  showlegend = FALSE, x = 0.25, y = 0.22, text = "Average hazard", 
+) %>% add_text(
+  showlegend = FALSE, x = 0.3, y = 0.22, text = "Average hazard",
+  textfont = list(family = "sans serif", size = 10) 
 )
 
-# Adding options to group them based on variables
+# Helper function to group RSF metrics based on variables
 library(RColorBrewer)
 unique_index <- function(x) {
   unique_vals <- unique(x)
@@ -232,34 +243,65 @@ create_buttons <- function(vars) {
       args = list(list( # Some elements are just "double-list". This changes style to every DOM elements
         line.color = color_palletes[var_factors],
         marker.color = color_palletes[var_factors],
-        legendgroup = factor(hr_sorted_rsf[[var]]),
+        legendgroup = hr_sorted_rsf[[var]],
         showlegend = 1:cutoff %in% unique_index(var_factors),
-        name = factor(hr_sorted_rsf[[var]]),
-        trace = 1:50
-      ))
+        name = as.character(hr_sorted_rsf[[var]])
+      ), 1:cutoff - 1) # The DOMNum it applies to
     )
     return(button)
   })
 }
 
-# Setting layout
-fig <- fig %>% layout(
-  title = "High-Risk Employee Attrition Trajectory",
+
+# --- Setting layout
+coxph_layout = list(
+  title = "High-Risk Employees, according to Hazard Ratio",
+  shapes = list(),
+  xaxis = list(title = "Rank"),
+  yaxis = list(title = "Hazard Ratio")
+)
+rsf_layout = list( 
+  title = "High-Risk Employees: RSF's Accumulated Risk Trajectory",
+  shapes = list(baseline),
+  xaxis = list(title = "Year", range = c(0, 5), zerolinecolor = '#ffff'),
+  yaxis = list(title = "Accummulated Risk until Year _", range = c(0, 1.5), zerolinecolor = '#ffff')
+)
+fig <- fig %>% layout(unlist(rsf_layout)) %>% layout(
+  title = "High-Risk Employees: RSF's Accumulated Risk Trajectory",
+  shapes = list(baseline),
   xaxis = list(title = "Year", range = c(0, 5), zerolinecolor = '#ffff'),
   yaxis = list(title = "Accummulated Risk until Year _", range = c(0, 1.5), zerolinecolor = '#ffff'),
   plot_bgcolor = '#e5ecf6',
   updatemenus = list(
     list(
-      y = 0.9,
+      x = -0.1, y = 0.9, yref = "paper",
+      showactive = TRUE,
+      buttons = list(
+        list(
+          label = "Random Survival Forest",
+          method = "update",
+          args = list(list(visible = c(rep(TRUE, cutoff), FALSE, TRUE)), rsf_layout, 1:(cutoff+2) - 1)
+        ),
+        list(
+          label = "Cox Proportional",
+          method = "update",
+          args = list(list(visible = c(rep(FALSE, cutoff), TRUE, FALSE)), coxph_layout, 1:(cutoff+2) - 1)
+        )
+      )
+    ), list(
+      x = -0.1, y = 0.6, yref = "paper",
       showactive = TRUE,
       buttons = create_buttons(c("EmployeeNumber", "BusinessTravel", "EnvironmentSatisfaction", "Gender",
                                  "JobLevel", "JobRole", "JobSatisfaction", "MaritalStatus", "NumCompaniesWorked",
                                  "OverTime", "StockOptionLevel"))
     )
-  ),
-  annotations = list(
+  ), annotations = list(
     list(
-      text = "Based on", x = -0.3, xref = "paper", y = 1, yref = "paper", align = "left", showarrow = FALSE
+      x = -0.35, y = 1, xref = "paper", yref = "paper", 
+      text = "Method", align = "left", showarrow = FALSE
+    ), list(
+      x = -0.35, y = 0.7, xref = "paper", yref = "paper", 
+      text = "Based on", align = "left", showarrow = FALSE, visible = TRUE
     )
   )
 )
