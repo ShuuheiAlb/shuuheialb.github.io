@@ -157,10 +157,8 @@ print_coxph_var_rank(hr1c)
 
 # Final iteration
 rsf_cols <- c("Attrition", "YearsAtCompany", "JobLevel", "OverTime", "StockOptionLevel",
-          "JobRole", "EnvironmentSatisfaction", "NotWorkingYears")
-coxph_cols <- c("Attrition", "YearsAtCompany", "OverTime", "JobInvolvement", "DistanceFromHome",
-              "JobSatisfaction", "BusinessTravel", "EnvironmentSatisfaction", "MaritalStatus",
-              "Gender")
+          "JobRole", "EnvironmentSatisfaction", "NumCompaniesWorked", "NotWorkingYears")
+coxph_cols <- c("Attrition", "YearsAtCompany", "JobRole", "OverTime", "StockOptionLevel", "MaritalStatus")
 rsf_final_model <- rsf_model(hr[rsf_cols])
 coxph_final_model <- coxph_model(hr[coxph_cols])
 cols <- c("Attrition", "YearsAtCompany", "MonthlyIncome", "OverTime", "Age",

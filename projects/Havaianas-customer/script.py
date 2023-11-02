@@ -12,6 +12,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 receipts = pd.read_excel("receipts.xls")
+# Set verification data aside
+
 print(receipts.head())
 print(receipts.info()) # Data formats and nulls
 print(sum(receipts.duplicated()))
@@ -33,6 +35,7 @@ plt.show()
 
 #%%
 
+# Cluster
 
 
 # %%
