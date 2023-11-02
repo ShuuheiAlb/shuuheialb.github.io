@@ -2,23 +2,43 @@
 # Import & clean
 setwd("Downloads/shuuheialb.github.io/projects/employee-attrition")
 rm(list = ls())
-hr <- read.csv("hr_data.csv")
+DATA <- read.csv("hr_data.csv")
 
-# Filter columns
+# Save some for verification
+set.seed(123)
+SIZE <- round(0.1*nrow(DATA))
+RAND <- sample(1:nrow(DATA))
+VERI <- DATA[RAND[1:round(0.1*nrow(DATA))], ]
+hr <- DATA[-RAND[1:round(0.1*nrow(DATA))], ]
+
+
+# No incorrect/problematic entries
+#head(hr)
+#nrow(hr[duplicated(hr), ])
+#sum(is.na(hr))
+#summary(hr)
+#sapply(hr, function(x) {
+#  unique_vals <- sort(unique(x))
+#  if (length(unique_vals) <= 30) return(unique_vals)
+#  return(c(unique_vals[1:30], "etc"))
+#})
+
+# Convert column data types
+cat_cols <- c("BusinessTravel", "Department", "Gender", "EducationField", "JobRole", "MaritalStatus")
+hr[cat_cols] <- lapply(hr[cat_cols], factor)
+bool_cols <- c("Attrition", "Over18", "OverTime")
+hr[bool_cols] <- lapply(hr[bool_cols], function (col) ifelse(col %in% c("Yes", "Y"), TRUE, FALSE))
+
+# Filter irrelevant columns
 cols <- names(hr)
 cols <- cols[cols != "EmployeeNumber"]
 single_value_cols <- names(hr)[sapply(hr, function (col) length(unique(col)) == 1)]
 cols <- cols[!(cols %in% single_value_cols)]
 
-# Convert column data types
-cat_cols <- c("BusinessTravel", "Department", "EducationField", "JobRole")
-hr[cat_cols] <- lapply(hr[cat_cols], factor)
-bool_cols <- c("Attrition", "Gender", "MaritalStatus", "OverTime")
-hr[bool_cols] <- lapply(hr[bool_cols], function (col) ifelse(col == "Yes", TRUE, FALSE))
-
 # Adding columns
 hr["NotWorkingYears"] <- hr["Age"] - hr["TotalWorkingYears"]
 hr["YearsAtOtherCompanies"] <- hr["TotalWorkingYears"] - hr["YearsAtCompany"]
+
 # Removing outliers
 outlier_index <- function(df, col) {
   vec <- df[[col]]
@@ -28,8 +48,10 @@ outlier_index <- function(df, col) {
   max <- qnt[2] + 3 * iqr
   return(which(vec < min | vec > max))
 }
-hr_train <- hr[-outlier_index(hr, "YearsAtCompany"), ]
+hr_full_row <- hr
+hr <- hr_full_row[-outlier_index(hr_full_row, "YearsAtCompany"), ]
 
+library(caret)
 library(survival)
 library(randomForestSRC)
 library(pec, warn.conflicts = FALSE)
@@ -50,37 +72,42 @@ rsf_model <- function (df) {
 # Cross-validation functions
 train_test_generate <- function (df, proportion = 0.7) {
   size <- round(proportion * nrow(df))
-  idx <- sample(seq_len(nrow(df)), size = size, replace = FALSE)
+  idx <- sample(1:size)
   return(list("train" = df[idx, ], "test" = df[-idx, ]))
 }
-cross_val <- function (df, model_f, metric_f, k = 20) {
+cross_val <- function (df, model_f, metric_f, k = 10) { # !!!! Test/train case may have 0 survival
+  random_index <- sample(1:nrow(df))
+  metrics <- integer(k)
   for (fold in 1:k) {
-    separate <- train_test_generate(df)
-    train <- separate$train
-    test <- separate$test
+    prev_end <- round((fold-1)/k * nrow(df))
+    size <- round(fold/k * nrow(df)) - round((fold-1)/k * nrow(df))
+    idx <- random_index[(prev_end+1):size]
+    test <- df[idx, ]
+    train <- df[-idx, ]
     model <- model_f(train)
-    if (!(exists("metric_tot"))) {
-      metric_tot <- metric_f(test, model)
-    } else {
-      metric_tot <- metric_tot + metric_f(test, model)
-    }
+    metrics[[fold]] <- metric_f(test, model)
   }
-  metric_avg <- metric_tot/k
-  return(metric_avg[order(abs(metric_avg), decreasing = TRUE)])
+  metrics_avg <- mean(na.omit(metrics))
+  return(metrics_avg[order(abs(metrics_avg), decreasing = TRUE)])
 }
 
 # Validation metrics
 # 1. Feature rank
 # ----- Cox score
 coxph_score <- function (df, model) {
-  return(summary(model)$coefficients[, "z"]) # the test data is indeed not used
-}
-print_coxph_var_rank <- function (df) {
-  print("Average univariate Cox score:")
-  print(cross_val(df, coxph_model, coxph_score))
+  return(unlist(cindex(model, formula = Surv(YearsAtCompany, Attrition) ~ ., data = df)$AppCindex))
 }
 coxph_slope <- function (df, model) {
   return(summary(model)$coefficients[, "coef"])
+}
+print_coxph_var_rank <- function (df) {
+  features <- names(df)[!(names(df) %in% c("Attrition", "YearsAtCompany"))]
+  scores <- sapply(features, function (col){
+    cross_val(df[c("Attrition", "YearsAtCompany", col)], coxph_model, coxph_score)
+  })
+  names(scores) <- features
+  print("Average univariate Cox score:")
+  print(scores[order(scores, decreasing = TRUE)])
 }
 # ----- Importance
 rsf_importance <- function (df, model) {
@@ -94,13 +121,7 @@ print_rsf_var_rank <- function (df) {
 # 2. C-index
 print_c_index <- function(df, model_f) {
   print("Average concordance index:")
-  print(cross_val(df, model_f, function (sub_df, model) {
-    unlist(cindex(model, formula = Surv(YearsAtCompany, Attrition) ~ ., data = sub_df)$AppCindex)
-  }))
-}
-print_coxph_var_rank <- function (df, k = 20) {
-  print("Average univariate Cox score:")
-  print(cross_val(df, coxph_model, coxph_score, k))
+  print(cross_val(df, model_f, coxph_score))
 }
 # 3. PEC
 plot_pec <- function(df, model_f) {
@@ -130,6 +151,13 @@ plot_correlation <- function (df, limit = -1) {
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
           plot.title = element_text(hjust = 0.5))
 }
+
+# Removing time-dependent variables, prop hazard violators
+coxph_cols <- cols[!(cols %in% c("Age", "YearsWithCurrManager", "YearsInCurrentRole", "TotalWorkingYears", "YearsSinceLastPromotion",
+                                 "Department", "JobRole", "JobLevel", "MonthlyIncome", "NumCompaniesWorked", "NotWorkingYears"))]
+# First iteration
+hr1c <- hr[coxph_cols]
+print_coxph_var_rank(hr1c)
 
 # Final iteration
 rsf_cols <- c("Attrition", "YearsAtCompany", "JobLevel", "OverTime", "StockOptionLevel",

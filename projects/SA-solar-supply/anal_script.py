@@ -5,7 +5,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.stats import norm
-import pmdarima as pm
 
 # Import data
 df = pd.read_csv("extracted.csv")

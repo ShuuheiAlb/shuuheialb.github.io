@@ -1,27 +1,38 @@
-import kmedoids
 
-c = kmedoids.fasterpam(distmatrix, 5)
-print("Loss is:", c.loss)
+# Why this dataset: Many retail/restaurants have POS receipt data.
+#
+# I wanna toy around with the most robust clusters, via k-medoid/PAM.
+# Metrics: 1) sales, 2) num of items (mimicking frequency), 3) 
+# 
 
-# Generate sample data (replace with your actual data)
-X = make_blobs(n_samples=100, n_features=8, centers=5, random_state=42)[0]
+#%%
 
-# Compute pairwise distances
-distances = pairwise_distances(X)
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# Perform k-medoids clustering using FastPAM algorithm
-k = 3  # Number of clusters
-kmedoids = KMedoids(n_clusters=k, metric='precomputed', method='pam', random_state=42)
-kmedoids.fit(distances)
+receipts = pd.read_excel("receipts.xls")
+print(receipts.head())
+print(receipts.info()) # Data formats and nulls
+print(sum(receipts.duplicated()))
+print(receipts.describe())
+for column in receipts.columns:
+    uniques = receipts[column].unique()
+    print(f"{column}: {uniques[:np.minimum(30, len(uniques))]}")
 
-# Get cluster labels and medoid indices
-cluster_labels = kmedoids.labels_
-medoid_indices = kmedoids.medoid_indices_
+# Some null columns on color_code and group => linked to style_x
+# Format data (time, size), filter cols, group/degroup categories
+# Then outliers
 
-# Print the cluster labels and medoids
-for cluster in range(k):
-    print(f"Cluster {cluster + 1} - Medoid Index: {medoid_indices[cluster]}")
-    cluster_samples = X[cluster_labels == cluster]
-    print(f"Samples in Cluster {cluster + 1}:")
-    print(cluster_samples)
-    print()
+receipts_origin = receipts
+receipts = receipts[receipts["amount_total"] < 300] # From histogram
+
+plt.draw()
+plt.hist(receipts["amount_total"], bins=30)
+plt.show()
+
+#%%
+
+
+
+# %%
