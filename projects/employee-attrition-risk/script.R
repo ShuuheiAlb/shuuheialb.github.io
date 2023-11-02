@@ -2,15 +2,7 @@
 # Import & clean
 setwd("Downloads/shuuheialb.github.io/projects/employee-attrition")
 rm(list = ls())
-DATA <- read.csv("hr_data.csv")
-
-# Save some for verification
-set.seed(123)
-SIZE <- round(0.1*nrow(DATA))
-RAND <- sample(1:nrow(DATA))
-VERI <- DATA[RAND[1:round(0.1*nrow(DATA))], ]
-hr <- DATA[-RAND[1:round(0.1*nrow(DATA))], ]
-
+hr <- read.csv("hr_data.csv")
 
 # No incorrect/problematic entries
 #head(hr)
@@ -59,7 +51,7 @@ library(ggplot2)
 library(reshape2)
 library(viridis)
 
-# Models
+# === Models
 coxph_model <- function (df) {
   model <- coxph(data = df, formula = Surv(YearsAtCompany, Attrition) ~ ., method = "breslow", x = TRUE)
   return(model)
@@ -69,31 +61,34 @@ rsf_model <- function (df) {
   return(model)
 }
 
-# Cross-validation functions
+# === Cross-validation functions
 train_test_generate <- function (df, proportion = 0.7) {
   size <- round(proportion * nrow(df))
   idx <- sample(1:size)
   return(list("train" = df[idx, ], "test" = df[-idx, ]))
 }
-cross_val <- function (df, model_f, metric_f, k = 10) { # !!!! Test/train case may have 0 survival
+cross_val <- function (df, model_f, metrics_f, k = 5) {
   random_index <- sample(1:nrow(df))
-  metrics <- integer(k)
   for (fold in 1:k) {
     prev_end <- round((fold-1)/k * nrow(df))
-    size <- round(fold/k * nrow(df)) - round((fold-1)/k * nrow(df))
-    idx <- random_index[(prev_end+1):size]
+    size <- round(fold * nrow(df)/k) - round((fold-1) * nrow(df)/k)
+    idx <- random_index[(prev_end+1):(prev_end+size)]
     test <- df[idx, ]
     train <- df[-idx, ]
     model <- model_f(train)
-    metrics[[fold]] <- metric_f(test, model)
+    metrics <- metrics_f(test, model)
+    if (!exists("metrics_tot")) {
+      metrics_tot <- numeric(length(metrics)) # Also caters for "non-vector, numeric" metrics
+    }
+    metrics_tot <- metrics_tot + metrics
   }
-  metrics_avg <- mean(na.omit(metrics))
+  metrics_avg <- metrics_tot/k
   return(metrics_avg[order(abs(metrics_avg), decreasing = TRUE)])
 }
 
-# Validation metrics
+# === Accuracy metrics
 # 1. Feature rank
-# ----- Cox score
+# - Cox score
 coxph_score <- function (df, model) {
   return(unlist(cindex(model, formula = Surv(YearsAtCompany, Attrition) ~ ., data = df)$AppCindex))
 }
@@ -109,7 +104,7 @@ print_coxph_var_rank <- function (df) {
   print("Average univariate Cox score:")
   print(scores[order(scores, decreasing = TRUE)])
 }
-# ----- Importance
+# - Importance
 rsf_importance <- function (df, model) {
   importance <- predict(model, df, importance = TRUE)$importance
   return(importance)
@@ -131,7 +126,7 @@ plot_pec <- function(df, model_f) {
   title("Prediction Error Curve")
 }
 
-# Assumption functions
+# === Assumption functions
 check_proportional_hazard <- function(model) {
   print(cox.zph(model))
 }
@@ -151,6 +146,7 @@ plot_correlation <- function (df, limit = -1) {
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
           plot.title = element_text(hjust = 0.5))
 }
+
 
 # Removing time-dependent variables, prop hazard violators
 coxph_cols <- cols[!(cols %in% c("Age", "YearsWithCurrManager", "YearsInCurrentRole", "TotalWorkingYears", "YearsSinceLastPromotion",
@@ -172,7 +168,6 @@ cols <- c("Attrition", "YearsAtCompany", "MonthlyIncome", "OverTime", "Age",
 
 # Prediction
 hr["HazardRatio_CoxPH"] <- predict(coxph_final_model, hr, type = "risk")
-# coxph_risk <- exp(predict(coxph_final_model, hr, type = "lp")) %*% t(basehaz(coxph_final_model)["hazard"])
 
 years = 5
 rsf_risk <- predict(rsf_final_model, hr)$chf[, 1:(years+1)] # matrix
