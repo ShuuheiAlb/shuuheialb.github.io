@@ -6,6 +6,8 @@
 
 [This project](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/employee-attrition-risk/prediction.ipynb) will build Cox Propotional Hazard and Random Survival Forest model to predicts employee attrition, identify most influential factors affecting attrition and suggest intervention strategies.
 
+<img src="images/employee_attrition_1.png?raw=true"/>
+
 ---
 
 ### Customer Segmentation

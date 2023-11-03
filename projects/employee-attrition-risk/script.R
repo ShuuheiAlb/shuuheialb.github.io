@@ -43,7 +43,6 @@ outlier_index <- function(df, col) {
 hr_full_row <- hr
 hr <- hr_full_row[-outlier_index(hr_full_row, "YearsAtCompany"), ]
 
-library(caret)
 library(survival)
 library(randomForestSRC)
 library(pec, warn.conflicts = FALSE)
