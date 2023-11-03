@@ -47,7 +47,7 @@ plt.show()
 # Regularised by max energy, seasonal diff (year, week) 
 scaled_seasonal_diff_train = (train["Energy"]/train["Smoothed Max Energy"]).diff(lag).dropna()
 plt.close()
-plt.plot(train["Energy"].diff(lag))
+plt.plot(train["Energy"].diff(2))
 plt.show()
 
 #%%
@@ -69,8 +69,9 @@ def drift_model(df):
     end = df.iloc[len(df)-1, ]
     return end["Energy"] + (end["Energy"]-start["Energy"])/(end["Date"]-start["Date"]).days * 1
 def sine_model(df):
-    popt, pcov = curve_fit(sinusoidal_func, train_t, df["Energy"])
-    return sinusoidal_func(train_t[-1]+1, *popt)
+    initial_guess = [350, 1/365, 300, 960]
+    popt, pcov = curve_fit(sinusoidal_func, range(len(df)), df["Energy"], p0=initial_guess)
+    return sinusoidal_func(len(df), *popt)
 
 benchmarks = {
     "mean": mean_model,
@@ -89,7 +90,8 @@ plt.close()
 plt.draw()
 method = "sine"
 plt.plot(range(start, end), df.iloc[start:end]["Energy"] -
-                            np.array([benchmarks[method](df[i-mid:i]) for i in range(start, end)]), label=method)
+                            np.array([benchmarks[method](df[i-mid:i]) for i in range(start, end)]),
+                            label=method)
 plt.legend()
 plt.show()
 
