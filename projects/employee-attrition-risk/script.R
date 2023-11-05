@@ -1,11 +1,19 @@
 
-# Import & clean
+# Importing data
 setwd("Downloads/shuuheialb.github.io/projects/employee-attrition")
-rm(list = ls())
-hr <- read.csv("hr_data.csv")
+DATA <- read.csv("hr_data.csv")
+
+# Save some for verification
+set.seed(100)
+SIZE <- round(0.1*nrow(DATA))
+RAND <- sample(1:nrow(DATA))
+VERI <- DATA[RAND[1:round(0.1*nrow(DATA))], ]
+row.names(VERI) <- 1:nrow(VERI)
+hr <- DATA[-RAND[1:round(0.1*nrow(DATA))], ]
+row.names(hr) <- 1:nrow(hr)
 
 # No incorrect/problematic entries
-#head(hr)
+#head(hr, 10)
 #nrow(hr[duplicated(hr), ])
 #sum(is.na(hr))
 #summary(hr)
@@ -60,69 +68,103 @@ rsf_model <- function (df) {
   return(model)
 }
 
+# === Feature selection
+
+# 1. Cox score
+coxph_score <- function (df, model) { # ignore the model
+  features <- names(df)[!(names(df) %in% c("Attrition", "YearsAtCompany"))]
+  scores <- sapply(features, function (col){
+    summary(coxph_model(df[c("YearsAtCompany", "Attrition", col)]))$concordance[1]
+  })
+  names(scores) <- features
+  return(scores)
+}
+coxph_details <- function (model) {
+  return(summary(model)$coefficients[, c("exp(coef)", "coef", "se(coef)")])
+}
+# 2. RSF Importance
+rsf_importance <- function (df, model) {
+  return(predict(model, df, importance = TRUE)$importance)
+}
+# ===
+print_coxph_var_rank <- function (df) {
+  print("Univariate Cox score:")
+  res <- coxph_score(df, coxph_model(df))
+  # SOON: 1D line
+  print(res[order(res, decreasing = TRUE)])
+}
+print_rsf_var_rank <- function (df) {
+  print("Variable importance:")
+  res <- rsf_importance(df, rsf_model(df))
+  # SOON: 1D line
+  print(res[order(abs(res), decreasing = TRUE)])
+}
+
+# === Accuracy metrics
+
+# 1. C-index
+c_index <- function (df, model) {
+  c_table <- cindex(model, formula = Surv(YearsAtCompany, Attrition) ~ ., data = df)
+  if (unlist(c_table$Pairs) == 0) return(0) # In case of zero events
+  return(unlist(c_table$AppCindex))
+}
+# 2. PEC
+# ===
+print_c_index <- function(df, model_f) {
+  print("Concordance index:")
+  print(c_index(df, model_f(df)))
+}
+plot_pec <- function(df, model_f) { # split???
+  suppressMessages(pred_error <- pec(model_f(df), data = df, formula = Surv(YearsAtCompany, Attrition) ~ .,
+                                     splitMethod = "cv10", cens.model = "marginal", reference = FALSE))
+  plot(pred_error, xlim = c(0, 10), ylim = c(0, 0.25)) # 0.25 is the worst case scenario (random model)
+  title("Prediction Error Curve")
+}
+
 # === Cross-validation functions
 train_test_generate <- function (df, proportion = 0.7) {
   size <- round(proportion * nrow(df))
   idx <- sample(1:size)
   return(list("train" = df[idx, ], "test" = df[-idx, ]))
 }
-cross_val <- function (df, model_f, metrics_f, k = 5) {
+
+cross_val <- function (df, model_f, select_f, feature_num = 1, k = 5) {
   random_index <- sample(1:nrow(df))
+  performance_score1_vec <- numeric(k)
   for (fold in 1:k) {
     prev_end <- round((fold-1)/k * nrow(df))
     size <- round(fold * nrow(df)/k) - round((fold-1) * nrow(df)/k)
     idx <- random_index[(prev_end+1):(prev_end+size)]
     test <- df[idx, ]
     train <- df[-idx, ]
-    model <- model_f(train)
-    metrics <- metrics_f(test, model)
-    if (!exists("metrics_tot")) {
-      metrics_tot <- numeric(length(metrics)) # Also caters for "non-vector, numeric" metrics
-    }
-    metrics_tot <- metrics_tot + metrics
+    
+    # Outlier removal
+    train <- train[-outlier_index(train, "YearsAtCompany"), ]
+    
+    # Removal/adding columns: soon
+    
+    # Assumption check: soon
+    
+    # Initial model
+    model1 <- model_f(train)
+    feature_score <- select_f(test, model1)
+    feature_rank <- feature_score[order(abs(feature_score), decreasing = TRUE)]
+    
+    # Next model
+    #print("Choosing features ...")
+    #print(names(feature_rank)[1:feature_num])
+    model2 <- model_f(df[c("Attrition", "YearsAtCompany", names(feature_rank)[1:feature_num])])
+    performance_score1 <- c_index(df, model2)
+    # PEC variable soon
+    
+    performance_score1_vec[fold] <- performance_score1
   }
-  metrics_avg <- metrics_tot/k
-  return(metrics_avg[order(abs(metrics_avg), decreasing = TRUE)])
-}
-
-# === Accuracy metrics
-# 1. Feature rank
-# - Cox score
-coxph_score <- function (df, model) {
-  return(unlist(cindex(model, formula = Surv(YearsAtCompany, Attrition) ~ ., data = df)$AppCindex))
-}
-coxph_slope <- function (df, model) {
-  return(summary(model)$coefficients[, "coef"])
-}
-print_coxph_var_rank <- function (df) {
-  features <- names(df)[!(names(df) %in% c("Attrition", "YearsAtCompany"))]
-  scores <- sapply(features, function (col){
-    cross_val(df[c("Attrition", "YearsAtCompany", col)], coxph_model, coxph_score)
-  })
-  names(scores) <- features
-  print("Average univariate Cox score:")
-  print(scores[order(scores, decreasing = TRUE)])
-}
-# - Importance
-rsf_importance <- function (df, model) {
-  importance <- predict(model, df, importance = TRUE)$importance
-  return(importance)
-}
-print_rsf_var_rank <- function (df) {
-  print("Average variable importance:")
-  print(cross_val(df, rsf_model, rsf_importance))
-}
-# 2. C-index
-print_c_index <- function(df, model_f) {
-  print("Average concordance index:")
-  print(cross_val(df, model_f, coxph_score))
-}
-# 3. PEC
-plot_pec <- function(df, model_f) {
-  suppressMessages(pred_error <- pec(model_f(df), data = df, formula = Surv(YearsAtCompany, Attrition) ~ .,
-                                     splitMethod = "cv10", cens.model = "marginal", reference = FALSE))
-  plot(pred_error, xlim = c(0, 10), ylim = c(0, 0.25)) # 0.25 is the worst case scenario (random model)
-  title("Prediction Error Curve")
+  
+  print(paste0("Performance score via concordance index, for feature number = ", feature_num, ":"))
+  print(paste0("Mean: ", mean(performance_score1_vec)))
+  print(performance_score1_vec)
+  print(paste0("SE: ", sd(performance_score1_vec)))
+  # Box plot soon
 }
 
 # === Assumption functions
@@ -149,14 +191,11 @@ plot_correlation <- function (df, limit = -1) {
 
 # Removing time-dependent variables, prop hazard violators
 coxph_cols <- cols[!(cols %in% c("Age", "YearsWithCurrManager", "YearsInCurrentRole", "TotalWorkingYears", "YearsSinceLastPromotion",
-                                 "Department", "JobRole", "JobLevel", "MonthlyIncome", "NumCompaniesWorked", "NotWorkingYears"))]
-# First iteration
-hr1c <- hr[coxph_cols]
-print_coxph_var_rank(hr1c)
+                                 "Department", "JobRole", "JobLevel", "MonthlyIncome"))]
 
 # Final iteration
-rsf_cols <- c("Attrition", "YearsAtCompany", "JobLevel", "OverTime", "StockOptionLevel",
-          "JobRole", "EnvironmentSatisfaction", "NumCompaniesWorked", "NotWorkingYears")
+rsf_cols <- c("Attrition", "YearsAtCompany", "JobLevel", "OverTime", "MonthlyIncome", "StockOptionLevel", "JobRole",
+              "EnvironmentSatisfaction", "WorkLifeBalance")
 coxph_cols <- c("Attrition", "YearsAtCompany", "JobRole", "OverTime", "StockOptionLevel", "MaritalStatus")
 rsf_final_model <- rsf_model(hr[rsf_cols])
 coxph_final_model <- coxph_model(hr[coxph_cols])
@@ -167,9 +206,9 @@ cols <- c("Attrition", "YearsAtCompany", "MonthlyIncome", "OverTime", "Age",
 hr["HazardRatio_CoxPH"] <- predict(coxph_final_model, hr, type = "risk")
 
 years = 5
-rsf_risk <- predict(rsf_final_model, hr)$chf[, 1:(years+1)] # matrix
-rsf_survival_probs <- predict(rsf_final_model, hr)$survival[, 1:(years+1)]
-hr["Hazard_RSF_Current"] <- rsf_risk[, 1]
+rsf_risk <- predict(rsf_final_model, hr)$chf[, 1 + (0:years)] # matrix
+rsf_survival_probs <- predict(rsf_final_model, hr)$survival[, 1 + (0:years)]
+hr["Hazard_RSF_in_5_Years"] <- rsf_risk[, 5]
 hzrsf_cols <- sapply(0:years, function(i) {paste0("Hazard_RSF_", i)})
 hr[hzrsf_cols] <- rsf_risk[, 1 + (0:years)]
 
@@ -184,27 +223,26 @@ sorted <- function (df, key_col) {
 hr_sorted_coxph <- hr[sorted(hr, "HazardRatio_CoxPH"), ]
 head(hr_sorted_coxph[, preview_cols])
 
-#hridv <- hr[hr_sorted_coxph(hr, "Hazard_RSF"), preview_cols]
-#plot(1, type = "n", xlim = c(0, 5), ylim = c(0, 1), xlab = "Year", ylab = "Probability")
-#title("High-Risk Employee Turnoever Trajectory")
-#for (i in 1:cutoff) {
-#  lines(0:years, hridv[i, ap_cols], col = i, type = "l")
-#}
-#legend("topleft", legend = hridv[, "EmployeeNumber"], col = 1:nrow(hridv), lty = 1, title = "Employee Number")
 
 # Plotly implementation
 suppressMessages(library(plotly))
 
 group <- "EmployeeNumber"
 hr_sorted_rsf <- hr[sorted(hr, "Hazard_RSF_Current"), ]
+# Plotly implementation
+suppressMessages(library(plotly))
+
+group <- "EmployeeNumber"
+hr_sorted_rsf <- hr[sorted(hr, "Hazard_RSF_in_5_Years"), ]
 
 # Adding RSH trajectory risks
 fig <- plot_ly()
+employee_row_num_wrt_ <- match(1:length(hr_sorted_rsf), hr_sorted_rsf)
 for (rank in 1:cutoff) {
   employee_row_num <- as.numeric(rownames(hr_sorted_rsf)[rank])
   employee_row <- hr_sorted_rsf[rank, ]
   x <- 0:(ncol(rsf_risk)-1)
-  y <- rsf_risk[employee_row_num, ]
+  y <- rsf_risk[employee_row_num, ] #soon
   fig <- fig %>% add_trace(x = x,
                            y = y,
                            name = employee_row["EmployeeNumber"],
@@ -311,9 +349,8 @@ fig <- fig %>% layout(unlist(rsf_layout)) %>% layout(
     ), list(
       x = -0.1, y = 0.6, yref = "paper",
       showactive = TRUE,
-      buttons = create_buttons(c("EmployeeNumber", "BusinessTravel", "EnvironmentSatisfaction", "Gender",
-                                 "JobLevel", "JobRole", "JobSatisfaction", "MaritalStatus", "NumCompaniesWorked",
-                                 "OverTime", "StockOptionLevel"))
+      buttons = create_buttons(c("EmployeeNumber", "EnvironmentSatisfaction", "JobLevel", "JobRole",
+                                 "MonthlyIncome", "MaritalStatus", "OverTime", "StockOptionLevel", "WorkLifeBalance"))
     )
   ), annotations = list(
     list(
