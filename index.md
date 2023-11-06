@@ -12,9 +12,9 @@
 
 ### South Australia Solar Supply Forecast
 
-[This project](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/SA-solar-supply/forecast.ipynb) will attempt to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
+[This project](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/sa-solar-supply/forecast.ipynb) will attempt to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
 
-```
+---
 
 ### Havaianas Customer Segmentation
 
