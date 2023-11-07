@@ -3,10 +3,12 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
-from pmdarima import auto_arima
+from statsforecast import StatsForecast # soon
+from statsforecast.models import AutoARIMA
+from statsmodels.tsa.forecasting.theta import ThetaModel
 from statsmodels.tsa.arima_model import ARIMA
+from scipy.optimize import curve_fit
 
 # Import data
 DATA = pd.read_csv("extracted.csv")
@@ -49,24 +51,28 @@ model = auto_arima(
 #%%
 
 # Candidates
-def simple_exp_smooth_model(df):
-    model = SimpleExpSmoothing(df["Energy"])
-    return model.fit().forecast(1).iloc[0]
+# ETS, ARIMA, MSTL
+def ets_model(df):
+
+def simple_exp_smooth_model(df): # => with drift? ETS soon
+    ses = SimpleExpSmoothing(df["Energy"])
+    return ses.fit().forecast(1).iloc[0]
+def arima_model(df):
+    # AutoArima
+    df_scaled = df["Energy"]/df["Smoothed Max Energy"]
+    model = ARIMA(df_scaled, order=(1,1,1))
+    return model.fit().predict(start=len(df), end=len(df)).iloc[0] * \
+                np.array(df["Smoothed Max Energy"])[len(df)-1-(window_max+1)//2]
 def seasonal_recent_model(df):
     # Based on "stabilised" seasonal pattern + recency
     gap = 365
     return (df.iloc[(len(df)-gap-3):(len(df)-gap+3), ]["Energy"].mean() + df.iloc[len(df)-1, ]["Energy"])/2
-def arima_model(df):
-    # Based on pmdarima
-    # put the last 100
-    df_scaled = df["Energy"]/df["Smoothed Max Energy"]
-    model_fit = ARIMA(df_scaled, order=(1,1,1)).fit()
-    return model_fit.predict(start=len(df), end=len(df)) * \
-                np.array(df["Smoothed Max Energy"])[len(df)-1-(window_max+1)//2]
-def experimental_model(df):
-    return 0
+def theta_model(df):
+    df.index = df["Date"]
+    tm = ThetaModel(df["Energy"])
+    return tm.fit().forecast(1).iloc[0]
 
-# Benchmark
+# Baselines: Mean, (window) Naive/Drift, (window) Seasonal-Naive
 def mean_model(df):
     return df["Energy"].mean()
 def k_mean_model(df, k=7):
@@ -89,23 +95,29 @@ def sine_model(df): #  min 400 samples
 
 
 models = {
-    "simple-exp-smooth": simple_exp_smooth_model, # 260, less variance
-    "seasonal-recent": seasonal_recent_model, # min 365 samples, 255
-    "arima": arima_model, #
-    "k-mean": k_mean_model, # MSE 320 for (800-1600, given 400 data)
-    "naive": naive_model, # MSE 290
-    "drift": drift_model, # MSE 290
-    "sine": sine_model, # min 400? samples, MSE 260
-    "experimental": experimental_model
+    "simple-exp-smooth": simple_exp_smooth_model, # MSE 260 for 800-1600 with 400 data
+                                                    # MSE 270 for 800-1600 with 30 data
+                                                    # MSE 230 for 1000-1100 with 400 data
+    "seasonal-recent": seasonal_recent_model, # MSE 255 (1), -, 250 (3)
+                                              # => min 365 samples
+    "theta": theta_model, # MSE 265 (1), 270 (2), 
+    "arima": arima_model, # MSE -, 270 (2), 235 (3)
+                          # => the iteration is slowwww
+    "mean": mean_model, # MSE 320 (1), 270 (2), 290 (3)
+    "k-mean": k_mean_model, # MSE 280 (1), 280 (2), 240 (3) <= hyper-param
+    "naive": naive_model, # MSE 290 (1), 290 (2), 300 (3)
+    "drift": drift_model, # MSE 290 (1), 295 (2), 300 (3) <= hyper param
+    "sine": sine_model, # MSE 260 (1), -, 230 (3)
+                        # => min 400? samples
 }
 
 # Residuals, RMSE
 start = 800
-mid = 100
+mid = 400
 end = 1600
 plt.close()
 plt.draw()
-method = "arima"
+method = "simple-exp-smooth"
 #[models[method](df[i-mid:i])  for i in range(start, end)]
 residual = df.iloc[start:end]["Energy"] - np.array([models[method](df[i-mid:i]) for i in range(start, end)])
 plt.plot(range(start, end), residual, label=method)
@@ -115,7 +127,8 @@ plt.show()
 
 # %%
 
-# Prediction
+# Build the Dashboard
+
 plt.close()
 plt.plot(train["Energy"], label='Original Data')
 plt.plot(range(400, len(train)), np.array([seasonal_average_naive_model(train[i:(i+400)]) for i in range(len(train)-400)]), label='Fitted Data')
