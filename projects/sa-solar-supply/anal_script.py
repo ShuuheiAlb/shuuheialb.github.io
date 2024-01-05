@@ -18,11 +18,17 @@ for name in df["Name"].unique():
     plt.legend()
     plt.show()
 
+# Select the data from establishment dates
+df_est = pd.DataFrame(df)
+for name in df_est["Name"].unique():
+    start_date_idx = df[df["Name"] == name].index[0]
+    est_date_idx = df[(df["Name"] == name) & (df["Energy"] > 0)].index[0]
+    df_est.drop(index = list(range(start_date_idx, est_date_idx)), inplace=True)
+
 #%%
 
 # Trial nixtla
-# !!!Established date
-# !!!Ensemble ARIMA + Theta for few days into the future
+# Plan 3: MLForecast - LGBM/XGB/RF
 df_nixtla = df[["Name", "Date", "Energy", "Temperature", "Solar Irradiance"]] \
                 .replace("", np.nan).dropna() \
                 .rename(columns = {
@@ -30,9 +36,12 @@ df_nixtla = df[["Name", "Date", "Energy", "Temperature", "Solar Irradiance"]] \
                     "Date": "ds",
                     "Energy": "y"
                 })
+
+StatsForecast.plot(df_nixtla, plot_random = False)
+
 models = [AutoARIMA(), AutoTheta(), WindowAverage(7)]
 sf = StatsForecast(models, freq="D", df=df_nixtla)
-cv_df_nixtla = sf.cross_validation(df=df_nixtla, h=7, n_windows=5, step_size = 300)
+cv_df_nixtla = sf.cross_validation(df=df_nixtla, h=7, n_windows=5, step_size = 100)
 
 from utilsforecast.losses import mse
 from utilsforecast.evaluation import evaluate
@@ -51,10 +60,6 @@ eval_df_nixtla = evaluate_cross_validation(cv_df_nixtla.reset_index(), mse)
 eval_df_nixtla
 
 #%%
-
-# Plan 2: Use estimated annual sin curve as exog variable?
-# Plan 3: MLForecast - LGBM/XGB/RF
-# Metric 2: 90%-level => crossval should be close
 
 # Train-test
 lag = 365
