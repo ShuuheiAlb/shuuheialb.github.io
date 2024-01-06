@@ -25,3 +25,11 @@
 ### Title 4
 
 Coming soon
+
+---
+
+## Smaller Pieces
+
+### Link between Social Media Platform's Layoff and User Comment Toxicity
+
+[This mini-blog](/projects/socmed-layoff-mod/page) particularly talks in the case of Instagram, owned by Meta.
