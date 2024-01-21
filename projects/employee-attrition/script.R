@@ -1,6 +1,7 @@
 
 # Importing data
 setwd("Downloads/shuuheialb.github.io/projects/employee-attrition")
+rm(list = ls())
 DATA <- read.csv("hr_data.csv")
 
 # Save some for verification
@@ -34,14 +35,19 @@ cols <- names(hr)
 cols <- cols[cols != "EmployeeNumber"]
 single_value_cols <- names(hr)[sapply(hr, function (col) length(unique(col)) == 1)]
 cols <- cols[!(cols %in% single_value_cols)]
+invalid_unif_cols <- c("DailyRate", "MonthlyRate", "HourlyRate")
+cols <- cols[!(cols %in% invalid_unif_cols)]
 
 # Adding columns
+new_time_cols <- c("NotWorkingYears", "YearsAtOtherCompanies")
+cols <- c(cols, new_time_cols)
 hr["NotWorkingYears"] <- hr["Age"] - hr["TotalWorkingYears"]
 hr["YearsAtOtherCompanies"] <- hr["TotalWorkingYears"] - hr["YearsAtCompany"]
 
 # Removing outliers
 outlier_index <- function(df, col) {
-  vec <- df[[col]]
+  vec <- df[[col]] # !!!! NOTE: df[[..]] or df$.. return a vec/list (Python's sematically Series)
+                   # df[..] returns a dataframe
   qnt <- quantile(vec, probs = c(0.25, 0.75))
   iqr <- qnt[2] - qnt[1]
   min <- qnt[1] - 3 * iqr
