@@ -2,8 +2,8 @@
 # Hidden data
 .RData
 */.RHistory
-.ipynb_checkpoints
-*/.ipynb_checkpoints/*
+.ipynb_checkpoints/
+venv/
 
 # Large files
 projects/consumer-complaint/*.csv

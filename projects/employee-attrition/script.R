@@ -4,16 +4,17 @@ setwd("Downloads/shuuheialb.github.io/projects/employee-attrition")
 rm(list = ls())
 DATA <- read.csv("hr_data.csv")
 
-# Save some for verification
+# Save some test and validation data
+library(rsample)
 set.seed(100)
-SIZE <- round(0.1*nrow(DATA))
-RAND <- sample(1:nrow(DATA))
-VERI <- DATA[RAND[1:round(0.1*nrow(DATA))], ]
-row.names(VERI) <- 1:nrow(VERI)
-hr <- DATA[-RAND[1:round(0.1*nrow(DATA))], ]
-row.names(hr) <- 1:nrow(hr)
+SPLIT <- initial_validation_split(DATA, c(0.75, 0.15))
+TEST <- testing(SPLIT)
+VALID <- validation(SPLIT)
+hr <- training(SPLIT)
+hr_full <- rbind(hr, VALID)
 
-# No incorrect/problematic entries
+
+# Check for incorrect/problematic entries
 #head(hr, 10)
 #nrow(hr[duplicated(hr), ])
 #sum(is.na(hr))
@@ -24,47 +25,32 @@ row.names(hr) <- 1:nrow(hr)
 #  return(c(unique_vals[1:30], "etc"))
 #})
 
-# Convert column data types
+
+# Constant vectors:
+# Formatted columns
 cat_cols <- c("BusinessTravel", "Department", "Gender", "EducationField", "JobRole", "MaritalStatus")
-hr[cat_cols] <- lapply(hr[cat_cols], factor)
 bool_cols <- c("Attrition", "Over18", "OverTime")
-hr[bool_cols] <- lapply(hr[bool_cols], function (col) ifelse(col %in% c("Yes", "Y"), TRUE, FALSE))
-
-# Filter irrelevant columns
-cols <- names(hr)
-cols <- cols[cols != "EmployeeNumber"]
+# Irrelevant columns
+unique_id_col <- "EmployeNumber"
 single_value_cols <- names(hr)[sapply(hr, function (col) length(unique(col)) == 1)]
-cols <- cols[!(cols %in% single_value_cols)]
 invalid_unif_cols <- c("DailyRate", "MonthlyRate", "HourlyRate")
-cols <- cols[!(cols %in% invalid_unif_cols)]
-
-# Adding columns
+# Correlated columns
+coupled_cols <- c("Age", "TotalWorkingYears", "YearsWithCurrManager", "YearsInCurrentRole", "YearsSinceLastPromotion")
+high_cor_cols <- c("JobLevel")
+# Added columns
 new_time_cols <- c("NotWorkingYears", "YearsAtOtherCompanies")
-cols <- c(cols, new_time_cols)
-hr["NotWorkingYears"] <- hr["Age"] - hr["TotalWorkingYears"]
-hr["YearsAtOtherCompanies"] <- hr["TotalWorkingYears"] - hr["YearsAtCompany"]
 
-# Removing outliers
-outlier_index <- function(df, col) {
-  vec <- df[[col]] # !!!! NOTE: df[[..]] or df$.. return a vec/list (Python's sematically Series)
-                   # df[..] returns a dataframe
-  qnt <- quantile(vec, probs = c(0.25, 0.75))
-  iqr <- qnt[2] - qnt[1]
-  min <- qnt[1] - 3 * iqr
-  max <- qnt[2] + 3 * iqr
-  return(which(vec < min | vec > max))
-}
-hr_full_row <- hr
-hr <- hr_full_row[-outlier_index(hr_full_row, "YearsAtCompany"), ]
 
 library(survival)
 library(randomForestSRC)
 library(pec, warn.conflicts = FALSE)
+library(DataExplorer)
 library(ggplot2)
 library(reshape2)
-library(viridis)
+library(corrplot)
 
 # === Models
+
 coxph_model <- function (df) {
   model <- coxph(data = df, formula = Surv(YearsAtCompany, Attrition) ~ ., method = "breslow", x = TRUE)
   return(model)
@@ -127,12 +113,7 @@ plot_pec <- function(df, model_f) { # split???
   title("Prediction Error Curve")
 }
 
-# === Cross-validation functions
-train_test_generate <- function (df, proportion = 0.7) {
-  size <- round(proportion * nrow(df))
-  idx <- sample(1:size)
-  return(list("train" = df[idx, ], "test" = df[-idx, ]))
-}
+# === Cross-validation
 
 cross_val <- function (df, model_f, select_f, feature_num = 1, k = 5) {
   random_index <- sample(1:nrow(df))
@@ -144,97 +125,138 @@ cross_val <- function (df, model_f, select_f, feature_num = 1, k = 5) {
     test <- df[idx, ]
     train <- df[-idx, ]
     
-    # Outlier removal
-    train <- train[-outlier_index(train, "YearsAtCompany"), ]
+    # General preprocessing
+    train <- prepare(train)
+    test <- prepare(test)
     
-    # Removal/adding columns: soon
+    # Training-data preprocessing
+    train <- train[-outlier_index(train, "YearsAtCompany", iqr_coef = 2), ]
     
-    # Assumption check: soon
+    # Model-specific preprocessing
+    if (identical(model_f, coxph_model)) {
+      # Assumption check
+      cols <- colnames(train)
+      focus_cols <- cols[!(cols %in% c("Department", "JobRole"))]
+      pht <- proportional_hazard_table(model_f(train[focus_cols]))
+      broken_ph_assumption_cols <- names(which(pht$table[, "p"] < 0.01))
+      for (col in broken_ph_assumption_cols) {
+        inter_col <= paste0("Inter_YC_", col)
+        cols <- c(cols, inter_col)
+        train[inter_col] <- train[col] * train["YearsAtCompany"]
+        test[inter_col] <- test[col] * test["YearsAtCompany"]
+      }
+    } else {
+      # Probational data treatment
+      cols <- c(cols, "IsProbation")
+      train["IsProbation"] <- train["MonthlyIncome"] <= 2000
+      test["IsProbation"] <- test["MonthlyIncome"] <= 2000
+    }
     
     # Initial model
     model1 <- model_f(train)
     feature_score <- select_f(test, model1)
     feature_rank <- feature_score[order(abs(feature_score), decreasing = TRUE)]
     
+    # Correlated columns removal
+    feature_redundancy <- corr_table(train, limit = 0.7)
+    for (i in 1:nrow(feature_redundancy)) {
+      # Retain higher rank, if any
+      x <- feature_redundancy[i, "Var1"]
+      y <- feature_redundancy[i, "Var2"]
+      if (x %in% feature_rank && y %in% feature_rank) {
+        x_rank <- which(feature_rank == x)
+        y_rank <- which(feature_rank == y)
+        feature_rank <- feature_rank[-max(x_rank, y_rank)]
+      }
+    }
+    
     # Next model
+    final_features <- names(feature_rank)[1:min(feature_num, length(names(feature_rank)))]
     #print("Choosing features ...")
-    #print(names(feature_rank)[1:feature_num])
-    model2 <- model_f(df[c("Attrition", "YearsAtCompany", names(feature_rank)[1:feature_num])])
-    performance_score1 <- c_index(df, model2)
+    #print(final_features)
+    model2 <- model_f(train[c("Attrition", "YearsAtCompany", final_features)])
+    performance_score1 <- c_index(test, model2)
     # PEC variable soon
     
     performance_score1_vec[fold] <- performance_score1
   }
   
   print(paste0("Performance score via concordance index, for feature number = ", feature_num, ":"))
+  # Box plot soon
   print(paste0("Mean: ", mean(performance_score1_vec)))
   print(performance_score1_vec)
   print(paste0("SE: ", sd(performance_score1_vec)))
-  # Box plot soon
 }
-
-# === Assumption functions
-check_proportional_hazard <- function(model) {
-  print(cox.zph(model))
+# ===
+prepare <- function (df) {
+  df[cat_cols] <- lapply(df[cat_cols], factor)
+  df[bool_cols] <- lapply(df[bool_cols], function (col) { ifelse(col %in% c("Yes", "Y"), TRUE, FALSE) })
+  df["YearsAtOtherCompanies"] <- df["TotalWorkingYears"] - df["YearsAtCompany"]
+  df <- df[!(names(df) %in% c("EmployeeNumber", single_value_cols, invalid_unif_cols, coupled_cols, high_cor_cols))]
+  return(df)
 }
-plot_correlation <- function (df, limit = -1) {
-  # Only numerical (unless categories can be continuously extended)
-  num_cols <- sapply(df, is.numeric)
-  bool_cols <- sapply(df, is.logical)
-  df2 <- df[, num_cols | bool_cols]
+outlier_index <- function (df, col, iqr_coef = 0) {
+  vec <- df[[col]]
+  qnt <- quantile(vec, probs = c(0.25, 0.75))
+  iqr <- qnt[2] - qnt[1]
+  min <- qnt[1] - iqr_coef * iqr
+  max <- qnt[2] + iqr_coef * iqr
+  return(which(vec < min | vec > max))
+}
+proportional_hazard_table <- function (model) {
+  return(cox.zph(model))
+}
+corr_table <- function (df, limit = 0){
+  # Convert categories to dummies
+  df2 <- model.matrix(~ 0+., df)
   
-  # Only select the high-correlated columns
-  cor_matrix <- cor(df2)
-  high_cor_pairs <- which(cor_matrix >= limit & cor_matrix < 1, arr.ind = TRUE)
-  high_cor_cols <- colnames(df2)[high_cor_pairs[, 1]]
-  ggplot(data = melt(cor_matrix[high_cor_cols, high_cor_cols]), aes(x = Var1, y = Var2, fill = value)) +
-    geom_tile() + scale_fill_viridis() +
-    xlab("") + ylab("") + ggtitle("Correlation Map") +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-          plot.title = element_text(hjust = 0.5))
+  # Dropping entries
+  corr <- cor(df2)
+  corr[lower.tri(corr, diag = TRUE)] <- NA
+  corr[abs(corr) == 1] <- NA
+  
+  # Convert to long format, sorted
+  res <- melt(corr)
+  res <- na.omit(res)
+  res <- res[abs(res$value) > limit,]
+  res <- res[order(res$value, decreasing = TRUE),]
+  rownames(res) <- 1:nrow(res)
+  return(res)
 }
 
 
-# Removing time-dependent variables, prop hazard violators
-coxph_cols <- cols[!(cols %in% c("Age", "YearsWithCurrManager", "YearsInCurrentRole", "TotalWorkingYears", "YearsSinceLastPromotion",
-                                 "Department", "JobRole", "JobLevel", "MonthlyIncome"))]
 
 # Final iteration
-rsf_cols <- c("Attrition", "YearsAtCompany", "JobLevel", "OverTime", "MonthlyIncome", "StockOptionLevel", "JobRole",
-              "EnvironmentSatisfaction", "WorkLifeBalance")
-coxph_cols <- c("Attrition", "YearsAtCompany", "JobRole", "OverTime", "StockOptionLevel", "MaritalStatus")
+hr_full <- prepare(hr_full)
+hr <- prepare(hr)
+rsf_cols <- c("Attrition", "YearsAtCompany", "OverTime", "MonthlyIncome", "IsProbation", "StockOptionLevel", 
+              "EnvironmentSatisfaction", "JobRole", "NumCompaniesWorked", "NotWorkingYears")
+coxph_cols <- c("Attrition", "YearsAtCompany", "MonthlyIncome", "JobRole", "OverTime")
 rsf_final_model <- rsf_model(hr[rsf_cols])
 coxph_final_model <- coxph_model(hr[coxph_cols])
 cols <- c("Attrition", "YearsAtCompany", "MonthlyIncome", "OverTime", "Age",
           "JobRole", "NumCompaniesWorkedPerYear", "StockOptionLevel")
 
-# Prediction
-hr["HazardRatio_CoxPH"] <- predict(coxph_final_model, hr, type = "risk")
-
+# Appending predictions
 years = 5
 rsf_risk <- predict(rsf_final_model, hr)$chf[, 1 + (0:years)] # matrix
 rsf_survival_probs <- predict(rsf_final_model, hr)$survival[, 1 + (0:years)]
-hr["Hazard_RSF_in_5_Years"] <- rsf_risk[, 5]
-hzrsf_cols <- sapply(0:years, function(i) {paste0("Hazard_RSF_", i)})
-hr[hzrsf_cols] <- rsf_risk[, 1 + (0:years)]
+hr["Hazard_RSF_in_1yr"] <- rsf_risk[, 2]
+hr["HazardRatio_CoxPH"] <- predict(coxph_final_model, hr, type = "risk")
+preview_cols <- c("EmployeeNumber", coxph_cols, rsf_cols, "Hazard_RSF_in_1yr", "HazardRatio_CoxPH")
 
-preview_cols <- c("EmployeeNumber", coxph_cols, rsf_cols, "HazardRatio_CoxPH", hzrsf_cols)
-
-# Table sorted by Cox Hazard Ratio
-cutoff = 50
+# Table sorted by hazards
+cutoff = 20
 sorted <- function (df, key_col) {
   df <- df[df["Attrition"] == FALSE, ]
   return(row.names(df)[order(df[, key_col], decreasing = TRUE)][1:cutoff])
 }
+hr_sorted_rsf <- hr[sorted(hr, "Hazard_RSF_in_1yr"), ]
 hr_sorted_coxph <- hr[sorted(hr, "HazardRatio_CoxPH"), ]
+head(hr_sorted_rsf[, preview_cols])
 head(hr_sorted_coxph[, preview_cols])
 
 
-# Plotly implementation
-suppressMessages(library(plotly))
-
-group <- "EmployeeNumber"
-hr_sorted_rsf <- hr[sorted(hr, "Hazard_RSF_Current"), ]
 # Plotly implementation
 suppressMessages(library(plotly))
 
