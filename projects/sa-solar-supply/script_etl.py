@@ -1,6 +1,6 @@
 import json
 import sqlite3
-import sys
+from sys import exit
 from datetime import datetime, timedelta
 from os.path import isfile
 
@@ -35,7 +35,7 @@ def json_print(data):
 def exploratory_test():
     path = "/weather/station" # free to update
     json_print(opennem_response(path).json())
-    sys.exit()
+    exit()
 
 #exploratory_test()
 

@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-from ydata_profiling import ProfileReport
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -11,19 +10,23 @@ np.random.seed(100)
 DATA = pd.read_csv("complaints_data.csv")
 SIZE = round(0.1*len(DATA))
 RAND = np.random.permutation(len(DATA))
-VERI = DATA.loc[RAND[:SIZE], ]
+TEST = DATA.loc[RAND[:SIZE], ]
 complaints = DATA.loc[RAND[SIZE:], ]
-
-profile = ProfileReport(complaints)
-profile.to_file("complaint_result.html")
 
 # Preview, data types
 print(complaints.head())
 print(complaints.info())
 # Data ranges, missing values, correlation
-category_counts = complaints['Product'].value_counts().sort_values(ascending=False)
-sns.barplot(x=category_counts.index, y=category_counts.values)
-#sns.heatmap(complaints.isna(), cmap="Greens")
+category_counts = complaints['Issue'].value_counts().sort_values(ascending=False)[:20]
+sns.barplot(x = category_counts.index, y = category_counts.values)
+plt.xticks(rotation = 90)
+plt.show()
+sns.heatmap(complaints.isna(), cmap="Greens")
+plt.show()
+
+# Resolve
+
+#%%
 
 # ..
 dummies = pd.get_dummies(df['Category']).rename(columns=lambda x: 'Category_' + str(x))
