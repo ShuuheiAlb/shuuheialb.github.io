@@ -112,7 +112,6 @@ hists = sol_sf
 
 # Basic visualisation
 import plotly.graph_objects as go
-from plotly.offline import plot
 
 selected_uid = "PAREPW"
 selected_hists = hists[hists["unique_id"] == selected_uid]
@@ -140,17 +139,4 @@ fig.update_layout(
                     pad={"r": 10, "t": 10}, showactive=True,
                     x=0.11, xanchor="left", y=1.1, yanchor="top")]
 )
-
-plot(fig)
-
-# %%
-
-# Try dash
-
-from dash import Dash, html
-
-app = Dash(__name__)
-
-app.layout = html.Div([
-    html.Div(children='Hello World')
-])
+fig
