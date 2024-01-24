@@ -6,4 +6,4 @@
 venv/
 
 # Large files
-projects/consumer-complaint/*.csv
+projects/*/complaints_data.csv

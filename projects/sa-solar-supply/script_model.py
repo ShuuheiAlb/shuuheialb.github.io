@@ -95,7 +95,7 @@ print(model_error_sol_sf_short)
 
 # Collect final predictions
 pred_list = []
-for col, row in model_error_sol_sf_long.iterrows():
+for col, row in pd.concat([model_error_sol_sf_long, model_error_sol_sf_short]).iterrows():
     loc_str = col
     best_model_str = row["best_model"]
     best_model_class = globals()[row["best_model"]]
@@ -109,34 +109,30 @@ preds = pd.concat(pred_list)
 hists = sol_sf
 
 # %%
-
 # Basic visualisation
 import plotly.graph_objects as go
 
-selected_uid = "PAREPW"
-selected_hists = hists[hists["unique_id"] == selected_uid]
-selected_preds = preds[preds.index == selected_uid]
+def sol_points(unique_id):
+    curr_hists = hists[hists["unique_id"] == unique_id]
+    curr_preds = preds[preds.index == unique_id]
+    return(dict(x = [curr_hists["ds"][-30:-6], curr_hists["ds"][-7:], curr_preds["ds"]],
+                y = [curr_hists["y"][-30:-6], curr_hists["y"][-7:], curr_preds["y"]],
+                visible = True))
+
+curr_loc = "ADP"
+curr_sol_points = sol_points(curr_loc)
 fig = go.Figure()
-fig.add_trace(go.Scatter(x = selected_hists["ds"][-30:-6], y = selected_hists["y"][-30:-6], mode='lines', name = "Historic"))
-fig.add_trace(go.Scatter(x = selected_hists["ds"][-7:], y = selected_hists["y"][-7:], mode='lines', name = "Actual"))
-fig.add_trace(go.Scatter(x = selected_preds["ds"], y = selected_preds["y"], mode='lines', name = "Forecast"))
+fig.add_trace(go.Scatter(x = curr_sol_points["x"][0], y = curr_sol_points["y"][0], mode='lines', name = "Historic"))
+fig.add_trace(go.Scatter(x = curr_sol_points["x"][1], y = curr_sol_points["y"][1], mode='lines', name = "Actual"))
+fig.add_trace(go.Scatter(x = curr_sol_points["x"][2], y = curr_sol_points["y"][2], mode='lines', name = "Forecast"))
 fig.update_layout(barmode = 'overlay', template = "plotly_white")
 fig.update_layout(
-    updatemenus = [dict(type = "buttons",
-                        direction = "left",
-                        buttons=list([
-                            dict(
-                                args=["type", "surface"],
-                                label="3D Surface",
-                                method="restyle"
-                            ),
-                            dict(
-                                args=["type", "heatmap"],
-                                label="Heatmap",
-                                method="restyle"
-                            )
-                        ]),
-                    pad={"r": 10, "t": 10}, showactive=True,
-                    x=0.11, xanchor="left", y=1.1, yanchor="top")]
+    updatemenus = [dict(direction = "down",
+                        buttons = [dict(args=[sol_points(loc)],
+                                        label=loc,
+                                        method="restyle") for loc in sol["Name"].unique()],
+                        pad = {"r": 10, "t": 10}, showactive =True,
+                        x = 0.11, xanchor="left", y = 1.1, yanchor = "top")]
 )
 fig
+# %%
