@@ -1,0 +1,53 @@
+---
+title: "IBM Employee Attrition Risk Assessment"
+output:
+  html_document:
+    toc: true
+    fig_caption: true
+---
+
+## Executive Summary
+
+This analysis uses survival analysis and machine learning techniques to identify key drivers of employee attrition in IBM. We found that monthly salary, job level, overtime work, job role and stock options level were consistently predictive of retention risk. Based on these results, management should consider compensation adjustments, career development opportunities, work time reduction, and engagement initiatives to retain valuable at-risk talent, especially among individual contributors earning less than \$50K annually. Regular re-evaluation of attrition risks can help optimise workforce planning and reduce turnover costs in the future.
+
+## Background & Objectives
+
+Employee attrition impacts productivity and operational costs. As IBM expands its market, understanding retention challenges is critical for strategic decision-making. The goal of this study was to assess which employee attributes influence the likelihood and timing of voluntary departures. Identification of at-risk groups will guide effective interventions by leadership.
+
+## Data Cleaning & Exploration
+
+Our analysis considered data from 1,470 IBM employees. No missing values were present. Exploratory analysis revealed an interesting pattern - employees in the lowest monthly income range (\$1-2k) exhibited anomalously narrow variation of years working at our company, potentially reflecting intern retention patterns. These observations were removed to avoid skewing results.
+
+```{r}
+rm(list = ls())
+DATA <- read.csv("hr_data.csv")
+
+# Save some test and validation data
+library(rsample)
+set.seed(100)
+SPLIT <- initial_validation_split(DATA, c(0.75, 0.15))
+TEST <- testing(SPLIT)
+VALID <- validation(SPLIT)
+hr <- training(SPLIT)
+hr_full <- rbind(hr, VALID)
+```
+
+## Predictive Modeling & Results
+
+Cox regression identified monthly income, job role, overtime and stock option level as strong predictors of attrition. Random forest modeling confirmed their relative importance, along with several additional factors such as training frequency, environmental satisfaction, number of previous companies, unemployment length and work-life balance. Cumulative hazard plots showed risk steadily increasing over 5 years for employees least advantaged on these factors. For example, those earning \<\$50K faced 35% greater hazards than higher paid peers.
+
+```{r}
+IRdisplay::display_html("<iframe seamless src='plot.html' width=1000, height=600></iframe>")
+```
+
+## Recommendations & Next Steps
+
+I recommend compensation reviews for lower paid staff and overtime reduction policies to aid retention of those living far from the office. Junior level employees and those reporting low job fulfilment should be considered for career development programs and engagement initiatives. Continued evaluation and modelling with new data can optimize these efforts over time.
+
+## Conclusion
+
+In summary, this attrition risk assessment uncovered actionable insights into how workforce characteristics relate to retention challenges. Strategic use of these results has potential to improve productivity and reduce costs for IBM. I thank you for your consideration of my recommendations.
+
+## Appendix: Jupyter Notebook
+
+To supplement the findings, a Jupyter notebook is also attached, allowing for interactive exploration of the data and model results.
