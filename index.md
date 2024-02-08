@@ -2,11 +2,11 @@
 
 ---
 
-### Employee Attrition Risk Predictive Analysis
+### Employee Attrition Risk Assessment
 
 [This project](/projects/employee-attrition/risk-assessment.html) builds Cox Propotional Hazard and Random Survival Forest models to quantify employee attrition risk and suggest intervention strategies. For details, see the [Jupyter notebook](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/employee-attrition/risk-assessment.ipynb).
 
-<img src="images/employee_attrition_1.png?raw=true"/>
+# (<img src="images/employee_attrition_1.png?raw=true"/>)
 
 ---
 
