@@ -6,4 +6,4 @@
 venv/
 
 # Large files
-projects/*/complaints_data.csv
+projects/learning-analytics/junyi_data
