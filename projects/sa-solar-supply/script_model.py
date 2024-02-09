@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from statsforecast import StatsForecast
-from statsforecast.models import AutoARIMA, AutoTheta, WindowAverage
+from statsforecast.models import AutoARIMA, AutoETL, AutoTheta, WindowAverage
 
 from os.path import isfile
 import pickle
@@ -43,10 +43,31 @@ sol_sf = sol[["Name", "Date", "Energy", "Temperature", "Solar Irradiance"]] \
 models = [AutoARIMA(), AutoTheta(), WindowAverage(7)]
 sf = StatsForecast(models, freq="D", df=sol_sf)
 
+#%%
+
 # Potentially an alternative basic model: "stabilised" seasonal avg
 def seasonal_recent_model(df):
     gap = 365
     return (df.iloc[(len(df)-gap-3):(len(df)-gap+3), ]["Energy"].mean() + df.iloc[len(df)-1, ]["Energy"])/2
+
+import lightgbm as lgb
+
+valid = add_timestamp_features(valid)
+
+x_train, y_train = train.drop(columns=['meter_reading']), train['meter_reading'].values
+x_valid, y_valid = valid.drop(columns=['meter_reading']), valid['meter_reading'].values
+
+params = {'num_leaves': 30,
+          'n_estimators': 400,
+          'max_depth': 8,
+          'min_child_samples': 200,
+          'learning_rate': 0.1,
+          'subsample': 0.50,
+          'colsample_bytree': 0.75
+         }
+
+model = lgb.LGBMRegressor(**params)
+model = model.fit(x_train.drop(columns=['timestamp']), y_train)
 
 # %%
 
@@ -77,13 +98,18 @@ else:
 # Calculate the error
 # AIC, BIC?
 def evaluate_cross_validation(df, metric):
-    models = df.drop(columns=['unique_id', 'ds', 'cutoff', 'y']).columns.tolist()
+    df["h"] = (df["ds"] - df["cutoff"]).dt.days
+    models = df.drop(columns=['unique_id', 'ds', 'cutoff', 'y', 'h']).columns.tolist()
     evals = []
     for cutoff in df['cutoff'].unique():
-        eval_ = evaluate(df[df['cutoff'] == cutoff], metrics=[metric], models=models)
-        evals.append(eval_)
+        df_smp = df[df['cutoff'] == cutoff]
+        for h in df_smp['h'].unique():
+            df_smp_smp = df_smp[df_smp['h'] == h]
+            eval_ = evaluate(df_smp_smp, metrics=[metric], models=models)
+            eval_['h'] = h
+            evals.append(eval_)
     evals = pd.concat(evals)
-    evals = evals.groupby('unique_id').mean(numeric_only=True) # Averages the error metrics for all cutoffs for every combination of model and unique_id
+    evals = evals.groupby(["unique_id", "h"]).mean(numeric_only=True) # Averages the error metrics for all cutoffs for every combination of model and unique_id
     evals['best_model'] = evals.idxmin(axis=1)
     return evals
 model_error_sol_sf_long = evaluate_cross_validation(cv_sol_sf_long.reset_index(), mse)
@@ -95,14 +121,15 @@ print(model_error_sol_sf_short)
 
 # Collect final predictions
 pred_list = []
-for col, row in pd.concat([model_error_sol_sf_long, model_error_sol_sf_short]).iterrows():
-    loc_str = col
+for index, row in pd.concat([model_error_sol_sf_long, model_error_sol_sf_short]).iterrows():
+    loc_str, h = index
     best_model_str = row["best_model"]
     best_model_class = globals()[row["best_model"]]
     best_model = best_model_class() if best_model_str != "WindowAverage"  else best_model_class(7)
     sol_sf_loc = sol_sf[sol_sf["unique_id"] == loc_str]
     best_sf = StatsForecast([best_model], freq="D", df=sol_sf_loc[:-7])
-    pred = best_sf.forecast(7, df=sol_sf_loc[:-7], X_df = sol_sf_loc[-7:].drop("y", axis=1))
+    pred = best_sf.forecast(h, df=sol_sf_loc[:-7], X_df = sol_sf_loc[-7:(-7+h)].drop("y", axis=1))[h]
+    #print(loc_str, h, sol_sf_loc, pred)
     pred.columns.values[1] = "y"
     pred_list.append(pred)
 preds = pd.concat(pred_list)
@@ -115,8 +142,8 @@ import plotly.graph_objects as go
 def sol_points(unique_id):
     curr_hists = hists[hists["unique_id"] == unique_id]
     curr_preds = preds[preds.index == unique_id]
-    return(dict(x = [curr_hists["ds"][-30:-6], curr_hists["ds"][-7:], curr_preds["ds"]],
-                y = [curr_hists["y"][-30:-6], curr_hists["y"][-7:], curr_preds["y"]],
+    return(dict(x = [curr_hists["ds"][-30:-7], curr_hists["ds"][-8:], pd.concat([curr_hists["ds"][-8:-7], curr_preds["ds"]])],
+                y = [curr_hists["y"][-30:-7], curr_hists["y"][-8:], pd.concat([curr_hists["y"][-8:-7], curr_preds["y"]])],
                 visible = True))
 
 curr_loc = "ADP"
