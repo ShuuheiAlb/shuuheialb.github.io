@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from statsforecast import StatsForecast
-from statsforecast.models import AutoARIMA, AutoETL, AutoTheta, WindowAverage
+from statsforecast.models import AutoTheta, AutoETS, AutoARIMA, CrostonOptimized
+from lightgbm import LGBMClassifier
+
 
 from os.path import isfile
 import pickle
@@ -32,7 +34,15 @@ for name in sol["Name"].unique():
 
 #%%
 
-# Model
+# Baseline models
+def naive_model(df):
+    gap = 365
+
+def seasonal_recent_model(df):
+    gap = 365
+    return (df.iloc[(len(df)-gap-3):(len(df)-gap+3), ]["Energy"].mean() + df.iloc[len(df)-1, ]["Energy"])/2
+
+# Nixtla models:
 sol_sf = sol[["Name", "Date", "Energy", "Temperature", "Solar Irradiance"]] \
                 .replace("", np.nan).dropna() \
                 .rename(columns = {
@@ -45,12 +55,30 @@ sf = StatsForecast(models, freq="D", df=sol_sf)
 
 #%%
 
+# Generalise input-output modelling
+def format_preprocess(df, mode):
+    if (mode in ["ARIMA", "Theta", "ETL"]):
+        df = df[["Name", "Date", "Energy", "Temperature", "Solar Irradiance"]] \
+                .replace("", np.nan).dropna() \
+                .rename(columns = {
+                    "Name": "unique_id",
+                    "Date": "ds",
+                    "Energy": "y"
+                })
+
+    
+    return df
+
+def format_postprocess(df, mode):
+    return None
+
 # Potentially an alternative basic model: "stabilised" seasonal avg
 def seasonal_recent_model(df):
     gap = 365
     return (df.iloc[(len(df)-gap-3):(len(df)-gap+3), ]["Energy"].mean() + df.iloc[len(df)-1, ]["Energy"])/2
-
-import lightgbm as lgb
+def seasonal_recent_model(df):
+    gap = 365
+    return (df.iloc[(len(df)-gap-3):(len(df)-gap+3), ]["Energy"].mean() + df.iloc[len(df)-1, ]["Energy"])/2
 
 valid = add_timestamp_features(valid)
 
