@@ -14,14 +14,9 @@
 
 ---
 
-### Title 3
+### Havaianas Customer Segmentation
 
-Coming soon
+[This presentation](https://public.tableau.com/app/profile/edwin.s8490/viz/HavaianasCustomerSegmentation/Report) classifies customer segments of Havaianas IOS Singapore based on various factors.
 
 ---
 
-## Smaller Pieces
-
-### Havaianas Customer Segmentation
-
-[This presentation](https://public.tableau.com/app/profile/edwin.s8490/viz/CustomerSegmentationfromHavaianasPOSReceipts/Report) classifies customer segments of Havaianas IOS Singapore based on various factors.
