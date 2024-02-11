@@ -20,7 +20,6 @@ hr_full <- rbind(hr, hr_valid)
 library(dplyr)
 library(ggplot2)
 library(reshape2)
-library(corrplot)
 #head(hr)
 # All columns' types and freq/dist (summary and plots)
 #str(hr)
@@ -60,12 +59,17 @@ coxph_model <- function (df) {
   model <- coxph(data = df %>% select(-any_of(ID)), formula = formula, method = "efron", x = TRUE)
   return(model)
 }
-rsf_model <- function (df) {
+rsf_model <- function (df, params = NULL) {
+  if (is.null(params)) {
+    params <- list(ntree = 100, mtry = NULL)
+  }
   formula <- as.formula(paste("Surv(", TIME, ", ", STATUS, ") ~ ."))
-  model <- rfsrc(data = df %>% select(-any_of(ID)), formula = formula, ntree = 100, block.size = 1)
-  return(model)
+  model <- rfsrc(data = df %>% select(-any_of(ID)), formula = formula,
+                 ntree = params$ntree, mtry = params$mtry)
 }
-model_f <- function (mode) { if (mode == "coxph") coxph_model else if (mode == "rsf") rsf_model else NULL }
+model_f <- function (mode, params = NULL) { if (mode == "coxph") coxph_model
+                                            else if (mode == "rsf") function(df) { rsf_model(df, params = params) }
+                                            else NULL }
 
 # === Feature selection
 
@@ -99,10 +103,9 @@ print_feature_rank <- function (df, mode) {
 
 # === Accuracy metrics
 
-# 1. C-index
-c_index <- function (df, df2, mode) {
-  # SurvMetrics variables incompatible with custom functions:
-  #   model after df then tested after df2
+# SurvMetrics variables incompatible with custom functions:
+#   model after df then tested after df2
+survMetrics_wrapper <- function (df, df2, mode, metric_f) {
   tmp <- list(time = TIME, status = STATUS)
   TIME <<- "time"
   STATUS <<- "status"
@@ -111,38 +114,35 @@ c_index <- function (df, df2, mode) {
     names(df)[names(df) == tmp$status] <- STATUS
     return(df)
   }
-  res <- SurvMetrics::Cindex(model_f(mode)(rename_survmetrics(df)), rename_survmetrics(df2), t_star = -1)
+  res <- metric_f(model_f(mode)(rename_survmetrics(df)), rename_survmetrics(df2), t_star = -1)
   TIME <<- tmp$time
   STATUS <<- tmp$status
   return(res)
 }
-c_index_pec <- function (df, model) {
-  # From pec: pre-template model, tested after df
-  formula <- as.formula(paste("Surv(", TIME, ", ", STATUS, ") ~ ."))
-  c_table <- pec::cindex(model, data = df, formula = formula)
-  if (unlist(c_table$Pairs) == 0) return(0) # In case of zero events
-  return(unlist(c_table$AppCindex))
+# 1. Concordance index
+c_index <- function (df, df2, mode) {
+  return(survMetrics_wrapper(df, df2, mode, SurvMetrics::Cindex))
 }
-# 2. PEC
-# ===
-print_c_index <- function (df, df2, mode) {
-  print("Concordance index:")
-  print(c_index(df, df2, mode))
+# 2. Brier score: SOON
+brier_score <- function (df, df2, mode) {
+  return(survMetrics_wrapper(df, df2, mode, SurvMetrics::Brier))
 }
-print_c_index_pec <- function (df, model) {
-  print("Concordance index:")
-  print(c_index_pec(df, model))
-}
+# Legacy code from pec:
 plot_pec <- function (df, model) { # split???
   formula <- as.formula(paste("Surv(", TIME, ", ", STATUS, ") ~ ."))
   pred_error <- pec(model, data = df, splitmethod = "cv10", formula = formula, cens.model = "marginal", reference = FALSE)
   plot(pred_error, xlim = c(0, 10), ylim = c(0, 0.25)) # 0.25 is the worst case scenario (random model)
   title("Prediction Error Curve")
 }
+# ===
+print_c_index <- function (df, df2, mode) {
+  print("Concordance index:")
+  print(c_index(df, df2, mode))
+}
 
 # === Cross-validation
 
-cross_val <- function (df, mode, feature_num = 1, k = 5) {
+cross_val <- function (df, mode, feature_num = 1, params = NULL, k = 5) {
   random_index <- sample(1:nrow(df))
   performance_score1_vec <- numeric(k)
   for (fold in 1:k) {
@@ -158,8 +158,9 @@ cross_val <- function (df, mode, feature_num = 1, k = 5) {
     test <- tt[[2]]
     
     # Initial model
-    model1 <- model_f(mode)(train)
+    model1 <- model_f(mode, params)(train)
     feature_rank1 <- feature_rank_f(mode)(test, model1)
+    feature_rank1 <- feature_rank1[order(feature_rank1, decreasing = TRUE)]
     
     # Correlated columns removal
     feature_redundancy <- corr_table(train, limit = 0.8)
@@ -181,13 +182,13 @@ cross_val <- function (df, mode, feature_num = 1, k = 5) {
     train2 <- train[c(TIME, STATUS, feature_rank2)]
     test2 <- test[c(TIME, STATUS, feature_rank2)]
     performance_score1 <- c_index(train2, test2, mode)
-    # PEC variable soon
+    # Brier score soon
     
     performance_score1_vec[fold] <- performance_score1
   }
   
+  # !!! Box plot soon
   print(paste0("Performance score via concordance index, for feature number = ", feature_num, ":"))
-  # Box plot soon
   print(paste0("Mean: ", mean(performance_score1_vec)))
   print(performance_score1_vec)
   print(paste0("SE: ", sd(performance_score1_vec)))
@@ -218,10 +219,10 @@ prepare <- function (df, df2, mode = "") {
     non_ph_cols <- names(which(ph_obj$table[, "p"] < 0.01))
     non_ph_cols <- non_ph_cols[!(non_ph_cols == "GLOBAL")]
     for (col in non_ph_cols) { # There should be a better Tidyverse syntax
-      inter_col <- paste0("Inter_TIME_", col)
-      df_train[inter_col] <- df_train[TIME] * df_train[col]
-      df2[inter_col] <- df2[TIME] * df2[col]
-      df_removed[inter_col] <- df_removed[TIME] * df_removed[col]
+      #inter_col <- paste0("Inter_TIME_", col)
+      #df_train[inter_col] <- df_train[TIME] * df_train[col]
+      #df2[inter_col] <- df2[TIME] * df2[col]
+      #df_removed[inter_col] <- df_removed[TIME] * df_removed[col]
     }
   }
   return(list(df_train, df2, df_removed))
@@ -234,7 +235,8 @@ prepare_gen <- function (df) {
     select(-any_of(invalid_unif_cols)) %>%
     mutate(NotWorkingYears = Age - TotalWorkingYears) %>%
     mutate(YearsAtOtherCompanies = TotalWorkingYears - YearsAtCompany) %>%
-    select(-any_of(coupled_temporal_cols))
+    select(-any_of(coupled_temporal_cols)) %>%
+    select(-any_of(high_corr_cols))
 }
 proportional_hazard_table <- function (model) {
   return(cox.zph(model))
@@ -259,7 +261,7 @@ corr_table <- function (df, limit = 0){
 
 
 # Final iteration
-coxph_cols <- c("Attrition", "YearsAtCompany", "EmployeeNumber", "MonthlyIncome", "JobRole", "OverTime", "StockOptionLevel")
+coxph_cols <- c("Attrition", "YearsAtCompany", "EmployeeNumber", "MonthlyIncome", "JobRole", "OverTime")
 rsf_cols <- c("Attrition", "YearsAtCompany", "EmployeeNumber", "OverTime", "MonthlyIncome", "StockOptionLevel", "TrainingTimesLastYear",
               "EnvironmentSatisfaction", "JobRole", "NumCompaniesWorked", "NotWorkingYears", "WorkLifeBalance")
 TT_c <- prepare(hr_full, TEST, mode = "coxph")
