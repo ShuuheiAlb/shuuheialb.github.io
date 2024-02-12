@@ -1,9 +1,10 @@
 
 # Hidden data
 .RData
-*/.RHistory
+.RHistory
 .ipynb_checkpoints/
 venv/
 
-# Large files
+# Large files + auth files
 projects/learning-analytics/junyi_data
+auth.txt
