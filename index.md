@@ -4,7 +4,13 @@
 
 ### South Australia Solar Supply Forecast
 
-[This project](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/solar-supply/nb.ipynb) attempts to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
+[This project](https://nbviewer.org/github/ShuuheiAlb/solar-supply-forecast/blob/main/nb.ipynb) attempts to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
+
+---
+
+### Customer Segmentation with Tableau
+
+[This presentation](https://public.tableau.com/app/profile/edwin.s8490/viz/CustomerSegmentsofHavaianasIONOrchard/Report) classifies customer segments of Havaianas Ion Orchard  based on various factors.
 
 ---
 
@@ -13,13 +19,3 @@
 [This project](/projects/employee-attrition/report.pdf) builds Cox Propotional Hazard and Random Survival Forest models to quantify employee attrition risk and suggest intervention strategies. For interactive code and visualisation, see [Jupyter notebook (Tableau vis included)](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/employee-attrition/nb.ipynb).
 
 ---
-
-### Havaianas Customer Segmentation
-
-[This presentation](https://public.tableau.com/app/profile/edwin.s8490/viz/HavaianasCustomerSegmentation/Report) classifies customer segments of Havaianas IOS Singapore based on various factors.
-
----
-
-### Junyi Academy Learning Analytics
-
-[This project](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/learning-analytics/nb.ipynb) is on the plan, using PostgreSQL and Python to extract insights.
