@@ -4,7 +4,7 @@
 
 ### Solar Supply Forecast in South Australia
 
-[This project](https://nbviewer.org/github/ShuuheiAlb/solar-supply-forecast/blob/main/nb.ipynb) attempts to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
+[This project](https://github.com/ShuuheiAlb/solar-supply-forecast) attempts to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
 
 ---
 
