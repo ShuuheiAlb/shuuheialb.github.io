@@ -16,7 +16,9 @@
 
 ### Fitness Food Price Dashboard
 
-[This project](https://github.com/ShuuheiAlb/fitness-food-price-dashboard/tree/main) is still on the way.
+[This project](https://github.com/ShuuheiAlb/fitness-food-price-dashboard/tree/main) compares the amount of macronutrients per dollar of various food sold in two largest Australian supermarket chain: Woolsworths and Coles.
+
+
 
 ---
 

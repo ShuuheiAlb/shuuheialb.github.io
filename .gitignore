@@ -6,5 +6,4 @@
 venv/
 
 # Large files + auth files
-projects/learning-analytics/junyi_data
 auth.txt
