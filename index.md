@@ -8,6 +8,12 @@
 
 ---
 
+### "Fitness Food on a Budget" Dashboard
+
+[This project](https://github.com/ShuuheiAlb/fitness-food-on-a-budget/tree/main) compares the amount of macronutrients per unit price for selected food sources available in two Australian supermarket chains.
+
+---
+
 ### Solar Supply Forecast in South Australia
 
 [This project](https://github.com/ShuuheiAlb/solar-supply-forecast) attempts to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
