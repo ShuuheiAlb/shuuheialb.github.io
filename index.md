@@ -22,6 +22,6 @@
 
 ### IBM Employee Attrition Risk Assessment
 
-[This project](/projects/employee-attrition/report.pdf) builds Cox Propotional Hazard and Random Survival Forest models to quantify employee attrition risk and suggest intervention strategies. For interactive code and visualisation, see [Jupyter notebook (Tableau vis included)](https://nbviewer.org/github/ShuuheiAlb/shuuheialb.github.io/blob/main/projects/employee-attrition/nb.ipynb).
+[This project](https://github.com/ShuuheiAlb/ibm-employee-attrition) builds Cox Propotional Hazard and Random Survival Forest models to quantify employee attrition risk and suggest intervention strategies.
 
 ---
