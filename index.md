@@ -2,21 +2,21 @@
 
 ---
 
-### Customer Segmentation with Tableau
+### Solar Supply Forecast in South Australia
 
-[This presentation](https://public.tableau.com/app/profile/edwin.s8490/viz/CustomerSegmentsofHavaianasIONOrchard/Report) classifies customer segments of Havaianas Ion Orchard  based on various factors.
+[This project](https://github.com/ShuuheiAlb/solar-supply-forecast) attempts to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
 
 ---
 
 ### "Fitness Food on a Budget" Dashboard
 
-[This project](https://github.com/ShuuheiAlb/fitness-food-on-a-budget/tree/main) compares the amount of macronutrients per unit price for selected food sources available in two Australian supermarket chains.
+[This project](https://github.com/ShuuheiAlb/fitness-food-on-a-budget/tree/main) compares macronutrient-cost effectiveness for various common foods in two Australian supermarket chains.
 
 ---
 
-### Solar Supply Forecast in South Australia
+### Customer Segmentation with Tableau
 
-[This project](https://github.com/ShuuheiAlb/solar-supply-forecast) attempts to forecast energy supply from solar photovoltaic (PV) plants in South Australia.
+[This presentation](https://public.tableau.com/app/profile/edwin.s8490/viz/CustomerSegmentsofHavaianasIONOrchard/Report) classifies customer and product segments of Havaianas Ion Orchard based on demographic and intent factors.
 
 ---
 
