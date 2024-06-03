@@ -1,9 +1,11 @@
 
 # Hidden data
+__pycache__/
+~lock
+venv/
 .RData
 .RHistory
 .ipynb_checkpoints/
-venv/
 
 # Large files + auth files
 auth.txt
